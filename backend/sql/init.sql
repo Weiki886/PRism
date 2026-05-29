@@ -31,3 +31,17 @@ CREATE TABLE IF NOT EXISTS `review` (
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `risk_feedback` (
+    `id`         BIGINT       NOT NULL AUTO_INCREMENT,
+    `review_id`  VARCHAR(64)  NOT NULL COMMENT '所属审查记录 ID',
+    `risk_index` INT          NOT NULL COMMENT '风险在 risks 数组中的下标',
+    `user_id`    BIGINT       NOT NULL COMMENT '反馈用户 ID',
+    `feedback`   VARCHAR(20)  NOT NULL COMMENT '反馈类型：FALSE_POSITIVE 误报 / CONFIRMED 确认',
+    `comment`    VARCHAR(500) DEFAULT '' COMMENT '反馈补充说明',
+    `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_review_risk_user` (`review_id`, `risk_index`, `user_id`),
+    INDEX `idx_review_id` (`review_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
