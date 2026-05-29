@@ -1,0 +1,25 @@
+# dependencies
+node_modules/
+
+# production
+dist/
+dist-ssr/
+
+# local env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# OS
+.DS_Store
+
+# Vite
+*.timestamp-*-*.mjs
+
+# Test
+coverage/
+__screenshots__/
