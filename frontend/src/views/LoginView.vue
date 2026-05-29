@@ -23,11 +23,6 @@ const loading = ref(false)
 const formRef = ref()
 
 async function onSubmit() {
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
   loading.value = true
   try {
     await userStore.login({ username: form.username, password: form.password })
@@ -63,7 +58,7 @@ async function onSubmit() {
         :model="form"
         :rules="rules"
         layout="vertical"
-        @submit.prevent="onSubmit"
+        @finish="onSubmit"
       >
         <a-form-item label="用户名" name="username">
           <a-input
