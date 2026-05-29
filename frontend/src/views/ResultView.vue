@@ -1,13 +1,47 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
 import { ArrowLeftOutlined, FileTextOutlined, WarningOutlined, BulbOutlined } from '@ant-design/icons-vue'
 import type { ReviewResponse } from '@/api/review'
+import { getFeedbackStats, submitFeedback, type FeedbackType, type RiskFeedbackStat } from '@/api/feedback'
 import RiskItem from '@/components/RiskItem.vue'
 
 const props = defineProps<{ review: ReviewResponse }>()
 defineEmits<{
   (e: 'reset'): void
 }>()
+
+const feedbackStats = ref<RiskFeedbackStat[]>([])
+const loading = ref(false)
+
+onMounted(async () => {
+  await loadFeedbackStats()
+})
+
+async function loadFeedbackStats() {
+  try {
+    feedbackStats.value = await getFeedbackStats(props.review.id)
+  } catch {
+    // 静默失败，不影响主流程
+  }
+}
+
+async function handleFeedback(riskIndex: number, feedback: FeedbackType) {
+  loading.value = true
+  try {
+    await submitFeedback(props.review.id, { riskIndex, feedback })
+    message.success(feedback === 'CONFIRMED' ? '已确认该风险' : '已标记为误报')
+    await loadFeedbackStats()
+  } catch {
+    // 拦截器已处理错误提示
+  } finally {
+    loading.value = false
+  }
+}
+
+function getFeedbackStatByIndex(index: number): RiskFeedbackStat | undefined {
+  return feedbackStats.value.find((s) => s.riskIndex === index)
+}
 
 const isError = computed(() => props.review.status === 'error')
 const sortedRisks = computed(() => {
@@ -96,14 +130,19 @@ const riskStats = computed(() => {
             class="title-badge"
           />
         </template>
-        <div v-if="sortedRisks.length" class="risk-list">
-          <RiskItem
-            v-for="(risk, i) in sortedRisks"
-            :key="`${risk.file}-${risk.line ?? 'na'}-${i}`"
-            :risk="risk"
-          />
-        </div>
-        <a-empty v-else description="未检出风险项" />
+        <a-spin :spinning="loading">
+          <div v-if="sortedRisks.length" class="risk-list">
+            <RiskItem
+              v-for="(risk, i) in sortedRisks"
+              :key="`${risk.file}-${risk.line ?? 'na'}-${i}`"
+              :risk="risk"
+              :risk-index="i"
+              :feedback-stat="getFeedbackStatByIndex(i)"
+              @feedback="handleFeedback"
+            />
+          </div>
+          <a-empty v-else description="未检出风险项" />
+        </a-spin>
       </a-card>
 
       <a-card :bordered="false" class="section">
