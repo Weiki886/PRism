@@ -48,7 +48,10 @@ public class ReviewController {
                 (String) prInfo.get("title"),
                 (String) prInfo.get("body"),
                 (String) prInfo.get("diff"),
-                (String) prInfo.get("author")
+                (String) prInfo.get("author"),
+                (String) prInfo.get("commitMessages"),
+                (String) prInfo.get("reviewComments"),
+                (String) prInfo.get("fileContexts")
         );
 
         Review review = Review.builder()
