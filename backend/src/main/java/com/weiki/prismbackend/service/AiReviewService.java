@@ -31,6 +31,7 @@ public class AiReviewService {
             - 关注 commit message 与实际变更是否一致
             - 如果已有评论提到了某个问题，不要重复指出
             - 对于不确定的风险，标注较低的风险等级
+            - 为每个风险评估置信度，帮助使用者识别可能的误报
 
             返回格式：
             {
@@ -40,7 +41,8 @@ public class AiReviewService {
                   "level": "CRITICAL|HIGH|MEDIUM|LOW",
                   "file": "文件路径",
                   "line": 行号整数或null,
-                  "description": "风险描述，说明具体问题和可能的影响"
+                  "description": "风险描述，说明具体问题和可能的影响",
+                  "confidence": "HIGH|MEDIUM|LOW"
                 }
               ],
               "suggestions": ["改进建议1", "改进建议2"]
@@ -51,6 +53,11 @@ public class AiReviewService {
             - HIGH：逻辑错误、数据丢失风险、并发问题
             - MEDIUM：性能问题、代码规范违反、缺少错误处理
             - LOW：可读性、命名建议、代码风格
+
+            置信度定义（用于误报控制）：
+            - HIGH：基于完整上下文，确定是问题，几乎不可能误报
+            - MEDIUM：很可能是问题，但受限于上下文不完整，存在一定误报可能
+            - LOW：疑似问题，需人工确认，可能是误报
             """;
 
     private final ChatClient chatClient;
@@ -115,11 +122,13 @@ public class AiReviewService {
             List<Map<String, Object>> rawRisks =
                     (List<Map<String, Object>>) parsed.getOrDefault("risks", List.of());
             for (Map<String, Object> r : rawRisks) {
+                String confidence = (String) r.get("confidence");
                 risks.add(RiskItem.builder()
                         .level((String) r.get("level"))
                         .file((String) r.get("file"))
                         .line(r.get("line") instanceof Number n ? n.intValue() : null)
                         .description((String) r.get("description"))
+                        .confidence(confidence != null ? confidence : "MEDIUM")
                         .build());
             }
 

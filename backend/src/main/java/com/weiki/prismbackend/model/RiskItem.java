@@ -20,4 +20,6 @@ public class RiskItem {
     private Integer line;
     @Schema(description = "风险描述")
     private String description;
+    @Schema(description = "置信度：HIGH / MEDIUM / LOW，表示该风险判断的可靠程度，用于误报控制", example = "HIGH")
+    private String confidence;
 }
