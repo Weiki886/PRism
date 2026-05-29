@@ -22,15 +22,8 @@ const routes: RouteRecordRaw[] = [
       {
         path: '',
         name: 'home',
-        component: () => import('@/views/HomeView.vue'),
+        component: () => import('@/views/HomePage.vue'),
         meta: { title: 'PR 审查' },
-      },
-      {
-        path: 'result/:id',
-        name: 'result',
-        component: () => import('@/views/ResultView.vue'),
-        props: true,
-        meta: { title: '审查结果' },
       },
     ],
   },

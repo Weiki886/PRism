@@ -43,11 +43,6 @@ const loading = ref(false)
 const formRef = ref()
 
 async function onSubmit() {
-  try {
-    await formRef.value.validate()
-  } catch {
-    return
-  }
   loading.value = true
   try {
     await apiRegister({
@@ -86,7 +81,7 @@ async function onSubmit() {
         :model="form"
         :rules="rules"
         layout="vertical"
-        @submit.prevent="onSubmit"
+        @finish="onSubmit"
       >
         <a-form-item label="用户名" name="username">
           <a-input v-model:value="form.username" size="large" placeholder="3-50 位字符" allow-clear>
