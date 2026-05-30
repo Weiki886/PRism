@@ -16,9 +16,11 @@ import {
   CloseCircleFilled,
   LoadingOutlined,
   ClockCircleOutlined,
+  BarChartOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
+import StatsOverviewModal from '@/components/StatsOverviewModal.vue'
 
 const userStore = useUserStore()
 const taskStore = useReviewTaskStore()
@@ -29,6 +31,7 @@ const initials = computed(() => userStore.username?.slice(0, 1).toUpperCase() ||
 const drawerOpen = ref(false)
 const newPrUrl = ref('')
 const drawerErrorMsg = ref('')
+const statsOpen = ref(false)
 
 const PR_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/i
 
@@ -215,6 +218,10 @@ function relativeTime(ts: number) {
                   {{ userStore.username }}
                 </a-menu-item>
                 <a-menu-divider />
+                <a-menu-item key="stats" @click="statsOpen = true">
+                  <BarChartOutlined />
+                  我的统计
+                </a-menu-item>
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined />
                   退出登录
@@ -397,6 +404,8 @@ function relativeTime(ts: number) {
         </ul>
       </div>
     </a-drawer>
+
+    <StatsOverviewModal v-model:open="statsOpen" />
   </a-layout>
 </template>
 
