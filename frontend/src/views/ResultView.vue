@@ -19,6 +19,7 @@ import {
 } from '@/api/feedback'
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 import RiskItem from '@/components/RiskItem.vue'
+import HealthScoreCard from '@/components/HealthScoreCard.vue'
 
 const props = defineProps<{ reviewId: string }>()
 const emit = defineEmits<{
@@ -358,6 +359,18 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
           type="warning"
           show-icon
           :message="fetchError"
+        />
+      </a-card>
+
+      <a-card
+        v-if="!submitError && isCompleted && review && review.healthScore != null && review.mergeAdvice"
+        :bordered="false"
+        class="section health-section"
+        :body-style="{ padding: 0 }"
+      >
+        <HealthScoreCard
+          :score="review.healthScore"
+          :advice="review.mergeAdvice"
         />
       </a-card>
 

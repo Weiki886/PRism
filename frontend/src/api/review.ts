@@ -16,6 +16,8 @@ export interface RiskItem {
 
 export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
 
+export type MergeAdvice = 'RECOMMEND' | 'CAUTION' | 'NOT_RECOMMEND'
+
 export interface ReviewResponse {
   id: string
   prTitle: string
@@ -24,6 +26,8 @@ export interface ReviewResponse {
   risks: RiskItem[]
   suggestions: string[]
   status: ReviewStatus
+  healthScore?: number | null
+  mergeAdvice?: MergeAdvice | null
 }
 
 export async function createReview(prUrl: string): Promise<ReviewResponse> {
