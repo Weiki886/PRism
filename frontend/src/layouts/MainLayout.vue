@@ -90,14 +90,26 @@ function openDetail(task: ReviewTask) {
 
 function removeTask(task: ReviewTask, e?: Event) {
   e?.stopPropagation()
+  const isRemote = !!task.id && task.status !== 'submitting'
   Modal.confirm({
-    title: '从列表中移除该任务？',
-    content: '后端记录不受影响，仅清除本地展示。',
-    okText: '移除',
+    title: isRemote ? '删除该评审记录？' : '从列表中移除该任务？',
+    content: isRemote
+      ? '将同时从服务器删除该记录，删除后无法恢复。'
+      : '该任务尚未提交成功，仅会从本地列表移除。',
+    okText: '删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => {
-      taskStore.remove(task.localId)
+    async onOk() {
+      if (isRemote) {
+        try {
+          await taskStore.deleteRemote(task.localId)
+          message.success('已删除')
+        } catch {
+          // 拦截器已提示错误，保留本地条目供重试
+        }
+      } else {
+        taskStore.remove(task.localId)
+      }
     },
   })
 }
@@ -105,14 +117,29 @@ function removeTask(task: ReviewTask, e?: Event) {
 function clearFinished() {
   if (!taskStore.finished.length) return
   Modal.confirm({
-    title: '清空已完成的本地记录？',
-    content: `将移除 ${taskStore.finished.length} 条已完成/失败的记录。`,
-    okText: '清空',
+    title: '删除全部已完成记录？',
+    content: `将从服务器删除 ${taskStore.finished.length} 条已完成/失败的评审记录，删除后无法恢复。`,
+    okText: '删除',
     okType: 'danger',
     cancelText: '取消',
-    onOk: () => {
-      taskStore.clearFinished()
-      message.success('已清空')
+    async onOk() {
+      const targets = [...taskStore.finished]
+      let removed = 0
+      for (const t of targets) {
+        try {
+          await taskStore.deleteRemote(t.localId)
+          removed++
+        } catch {
+          // 单条失败继续后续，剩余条目保留供重试
+        }
+      }
+      if (removed === targets.length) {
+        message.success(`已删除 ${removed} 条记录`)
+      } else if (removed > 0) {
+        message.warning(`已删除 ${removed} 条，${targets.length - removed} 条删除失败`)
+      } else {
+        message.error('删除失败，请稍后重试')
+      }
     },
   })
 }
@@ -228,11 +255,12 @@ function relativeTime(ts: number) {
           <a-button
             type="text"
             size="small"
+            danger
             :disabled="!taskStore.finished.length"
             @click="clearFinished"
           >
             <template #icon><DeleteOutlined /></template>
-            清空已完成
+            删除已完成
           </a-button>
         </a-space>
       </template>

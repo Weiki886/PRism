@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import {
   createReview,
+  deleteReview,
   getReview,
   getReviewHistory,
   type ReviewResponse,
@@ -203,6 +204,22 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     persist()
   }
 
+  /**
+   * 调用后端 DELETE /api/review/{id} 删除远端记录后再清本地。
+   * 仅当任务有 id（已落库）时才请求；无 id 的本地草稿直接走 remove。
+   * 抛出错误由调用方处理（用于显示提示与回滚 UI）。
+   */
+  async function deleteRemote(localId: string): Promise<void> {
+    const task = findByLocalId(localId)
+    if (!task) return
+    if (!task.id) {
+      remove(localId)
+      return
+    }
+    await deleteReview(task.id)
+    remove(localId)
+  }
+
   function clearFinished() {
     tasks.value = tasks.value.filter((t) => isInProgressStatus(t.status))
     persist()
@@ -270,6 +287,7 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     ensurePolling,
     refreshOne,
     remove,
+    deleteRemote,
     clearFinished,
     resumeAll,
     loadHistory,
