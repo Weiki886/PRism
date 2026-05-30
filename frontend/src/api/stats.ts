@@ -23,6 +23,6 @@ export async function getReviewStats(): Promise<ReviewStats> {
 }
 
 export async function getFeedbackOverview(): Promise<FeedbackOverview> {
-  const res = await request.get<FeedbackOverview>('/api/feedback-overview', { silent: true })
+  const res = await request.get<FeedbackOverview>('/api/review/feedback-overview', { silent: true })
   return res.data
 }
