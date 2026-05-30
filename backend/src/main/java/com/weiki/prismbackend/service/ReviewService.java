@@ -6,10 +6,13 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weiki.prismbackend.mapper.ReviewMapper;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import org.springframework.stereotype.Service;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -73,6 +76,49 @@ public class ReviewService {
         return reviewMapper.selectCount(
                 new LambdaQueryWrapper<Review>().eq(Review::getUserId, userId)
         );
+    }
+
+    /**
+     * 统计指定用户的评审概览：记录数、状态分布、累计风险数及各等级分布。
+     */
+    public ReviewStats statsByUserId(Long userId) {
+        List<Review> reviews = reviewMapper.selectList(
+                new LambdaQueryWrapper<Review>().eq(Review::getUserId, userId));
+
+        long completed = 0, error = 0, processing = 0, totalRisks = 0;
+
+        // 固定四个等级，保证返回结构完整（即使某等级数量为 0）
+        Map<String, Long> levelDist = new LinkedHashMap<>();
+        levelDist.put("CRITICAL", 0L);
+        levelDist.put("HIGH", 0L);
+        levelDist.put("MEDIUM", 0L);
+        levelDist.put("LOW", 0L);
+
+        for (Review r : reviews) {
+            switch (r.getStatus() == null ? "" : r.getStatus()) {
+                case "completed" -> completed++;
+                case "error" -> error++;
+                case "pending", "processing" -> processing++;
+                default -> { }
+            }
+
+            for (RiskItem risk : parseRisks(r.getRisksJson())) {
+                totalRisks++;
+                String level = risk.getLevel();
+                if (level != null && levelDist.containsKey(level)) {
+                    levelDist.merge(level, 1L, Long::sum);
+                }
+            }
+        }
+
+        return ReviewStats.builder()
+                .totalReviews(reviews.size())
+                .completedReviews(completed)
+                .errorReviews(error)
+                .processingReviews(processing)
+                .totalRisks(totalRisks)
+                .riskLevelDistribution(levelDist)
+                .build();
     }
 
     public List<RiskItem> parseRisks(String risksJson) {

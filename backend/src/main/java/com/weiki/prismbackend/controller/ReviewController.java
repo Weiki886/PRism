@@ -5,6 +5,7 @@ import com.weiki.prismbackend.common.ResultCode;
 import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
+import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
 import com.weiki.prismbackend.service.ReviewProcessor;
@@ -117,6 +118,13 @@ public class ReviewController {
                 .status("pending")
                 .build();
         return Result.success(resp);
+    }
+
+    @Operation(summary = "获取我的评审统计", description = "返回当前用户的评审概览：记录总数、状态分布、累计风险数及各等级分布")
+    @GetMapping("/review/stats")
+    public Result<ReviewStats> getStats(
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+        return Result.success(reviewService.statsByUserId(principal.getUserId()));
     }
 
     @Operation(summary = "删除评审记录", description = "删除当前用户的某条评审记录，仅能删除属于自己的记录")
