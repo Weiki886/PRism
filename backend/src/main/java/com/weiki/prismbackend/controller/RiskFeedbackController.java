@@ -18,7 +18,7 @@ import java.util.List;
 @Tag(name = "风险反馈", description = "对 AI 识别的风险进行误报/确认反馈")
 @RestController
 @RequestMapping("/api/review")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "Authorization")
 public class RiskFeedbackController {
 
     private final RiskFeedbackService feedbackService;

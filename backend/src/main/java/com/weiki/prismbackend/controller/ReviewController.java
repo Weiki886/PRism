@@ -23,7 +23,7 @@ import java.util.UUID;
 @Tag(name = "PR Review", description = "AI PR 代码审查接口")
 @RestController
 @RequestMapping("/api")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "Authorization")
 public class ReviewController {
 
     private final ReviewService reviewService;

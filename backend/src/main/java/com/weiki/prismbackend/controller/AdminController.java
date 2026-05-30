@@ -15,7 +15,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/admin")
 @PreAuthorize("hasRole('ADMIN')")
-@SecurityRequirement(name = "bearerAuth")
+@SecurityRequirement(name = "Authorization")
 public class AdminController {
 
     private final UserService userService;

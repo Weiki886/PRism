@@ -19,12 +19,13 @@ public class Knife4jConfig {
                         .description("AI PR 代码审查助手接口文档")
                         .version("1.0.0"))
                 .components(new Components()
-                        .addSecuritySchemes("bearerAuth",
+                        .addSecuritySchemes("Authorization",
                                 new SecurityScheme()
-                                        .type(SecurityScheme.Type.HTTP)
-                                        .scheme("bearer")
-                                        .bearerFormat("JWT")))
-                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"));
+                                        .type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER)
+                                        .name("Authorization")
+                                        .description("填写格式：Bearer {登录返回的 token}")))
+                .addSecurityItem(new SecurityRequirement().addList("Authorization"));
     }
 }
 
