@@ -39,3 +39,7 @@ export async function getReviewHistory(page = 1, size = 10): Promise<ReviewRespo
   })
   return res.data
 }
+
+export async function deleteReview(id: string): Promise<void> {
+  await request.delete(`/api/review/${id}`)
+}

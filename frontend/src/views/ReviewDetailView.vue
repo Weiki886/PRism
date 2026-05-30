@@ -43,8 +43,16 @@ onBeforeUnmount(() => {
 function onReset() {
   router.push({ name: 'home' })
 }
+
+function onDeleted() {
+  router.push({ name: 'home' })
+}
 </script>
 
 <template>
-  <ResultView :review-id="(route.params.id as string)" @reset="onReset" />
+  <ResultView
+    :review-id="(route.params.id as string)"
+    @reset="onReset"
+    @deleted="onDeleted"
+  />
 </template>

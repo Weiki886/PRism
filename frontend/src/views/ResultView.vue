@@ -1,14 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { message } from 'ant-design-vue'
 import {
   ArrowLeftOutlined,
   FileTextOutlined,
   WarningOutlined,
   BulbOutlined,
   LoadingOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
-import { getReview, type ReviewResponse } from '@/api/review'
+import { Modal, message } from 'ant-design-vue'
+import { deleteReview, getReview, type ReviewResponse } from '@/api/review'
 import {
   getFeedbackStats,
   submitFeedback,
@@ -19,8 +20,9 @@ import { useReviewTaskStore } from '@/stores/reviewTasks'
 import RiskItem from '@/components/RiskItem.vue'
 
 const props = defineProps<{ reviewId: string }>()
-defineEmits<{
+const emit = defineEmits<{
   (e: 'reset'): void
+  (e: 'deleted', reviewId: string): void
 }>()
 
 const taskStore = useReviewTaskStore()
@@ -183,6 +185,31 @@ function getFeedbackStatByIndex(index: number): RiskFeedbackStat | undefined {
   return feedbackStats.value.find((s) => s.riskIndex === index)
 }
 
+function handleDelete() {
+  if (!props.reviewId) return
+  Modal.confirm({
+    title: '删除该评审记录？',
+    content: '将从服务器永久删除该记录，删除后无法恢复。',
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        const localTask = taskStore.tasks.find((t) => t.id === props.reviewId)
+        if (localTask) {
+          await taskStore.deleteRemote(localTask.localId)
+        } else {
+          await deleteReview(props.reviewId)
+        }
+        message.success('已删除')
+        emit('deleted', props.reviewId)
+      } catch {
+        // 拦截器已提示
+      }
+    },
+  })
+}
+
 const headerTagColor = computed(() => {
   if (isError.value) return 'error'
   if (isCompleted.value) return 'success'
@@ -214,10 +241,20 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
           <a-tag :color="headerTagColor">{{ headerTagText }}</a-tag>
         </template>
         <template #extra>
-          <a-button @click="$emit('reset')">
-            <template #icon><ArrowLeftOutlined /></template>
-            返回首页
-          </a-button>
+          <a-space>
+            <a-button
+              v-if="isCompleted || isError"
+              danger
+              @click="handleDelete"
+            >
+              <template #icon><DeleteOutlined /></template>
+              删除记录
+            </a-button>
+            <a-button @click="$emit('reset')">
+              <template #icon><ArrowLeftOutlined /></template>
+              返回首页
+            </a-button>
+          </a-space>
         </template>
 
         <a-descriptions size="small" :column="{ xs: 1, sm: 2, md: 3 }">
