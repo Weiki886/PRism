@@ -5,6 +5,7 @@ import {
   deleteReview,
   getReview,
   getReviewHistory,
+  retryReview,
   type ReviewResponse,
   type ReviewStatus,
 } from '@/api/review'
@@ -205,6 +206,24 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
   }
 
   /**
+   * 调用后端 POST /api/review/{id}/retry 重新触发分析。
+   * 仅在任务有 id 且状态为 completed/error 时有意义；后端会在 pending/processing 时返回 409。
+   * 成功后将本地任务字段重置为 pending 并重启轮询。
+   */
+  async function retry(localId: string): Promise<void> {
+    const task = findByLocalId(localId)
+    if (!task || !task.id) return
+    await retryReview(task.id)
+    task.status = 'pending'
+    task.submitError = ''
+    task.riskCount = 0
+    task.suggestionCount = 0
+    task.finishedAt = null
+    persist()
+    startPolling(localId)
+  }
+
+  /**
    * 调用后端 DELETE /api/review/{id} 删除远端记录后再清本地。
    * 仅当任务有 id（已落库）时才请求；无 id 的本地草稿直接走 remove。
    * 抛出错误由调用方处理（用于显示提示与回滚 UI）。
@@ -288,6 +307,7 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     refreshOne,
     remove,
     deleteRemote,
+    retry,
     clearFinished,
     resumeAll,
     loadHistory,

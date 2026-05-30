@@ -7,9 +7,10 @@ import {
   BulbOutlined,
   LoadingOutlined,
   DeleteOutlined,
+  ReloadOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
-import { deleteReview, getReview, type ReviewResponse } from '@/api/review'
+import { deleteReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
 import {
   getFeedbackStats,
   submitFeedback,
@@ -210,6 +211,40 @@ function handleDelete() {
   })
 }
 
+function handleRetry() {
+  if (!props.reviewId) return
+  const isCompletedRetry = isCompleted.value
+  Modal.confirm({
+    title: isCompletedRetry ? '重新分析该 PR？' : '重新分析该 PR？',
+    content: isCompletedRetry
+      ? '将基于原 PR 链接重新触发分析，新结果会覆盖现有的风险列表与改进建议。'
+      : '将基于原 PR 链接重新触发分析。',
+    okText: '重新分析',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        const localTask = taskStore.tasks.find((t) => t.id === props.reviewId)
+        if (localTask) {
+          await taskStore.retry(localTask.localId)
+        } else {
+          await retryReview(props.reviewId)
+          // 兜底：详情页会通过 watch task.status 重新拉数据
+          await taskStore.refreshOne(props.reviewId)
+        }
+        // 重置本地视图，让进度卡片重新显示
+        review.value = null
+        feedbackStats.value = []
+        fetchError.value = ''
+        elapsed.value = 0
+        startElapsedTimer()
+        message.success('已重新加入分析队列')
+      } catch {
+        // 拦截器已提示（含 409 REVIEW_IN_PROGRESS）
+      }
+    },
+  })
+}
+
 const headerTagColor = computed(() => {
   if (isError.value) return 'error'
   if (isCompleted.value) return 'success'
@@ -242,6 +277,21 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
         </template>
         <template #extra>
           <a-space>
+            <a-button
+              v-if="isError"
+              type="primary"
+              @click="handleRetry"
+            >
+              <template #icon><ReloadOutlined /></template>
+              重新分析
+            </a-button>
+            <a-button
+              v-else-if="isCompleted"
+              @click="handleRetry"
+            >
+              <template #icon><ReloadOutlined /></template>
+              重新分析
+            </a-button>
             <a-button
               v-if="isCompleted || isError"
               danger

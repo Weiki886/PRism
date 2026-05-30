@@ -43,3 +43,8 @@ export async function getReviewHistory(page = 1, size = 10): Promise<ReviewRespo
 export async function deleteReview(id: string): Promise<void> {
   await request.delete(`/api/review/${id}`)
 }
+
+export async function retryReview(id: string): Promise<ReviewResponse> {
+  const res = await request.post<ReviewResponse>(`/api/review/${id}/retry`)
+  return res.data
+}
