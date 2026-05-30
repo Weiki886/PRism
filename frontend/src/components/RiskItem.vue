@@ -1,6 +1,14 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-import { LikeOutlined, DislikeOutlined } from '@ant-design/icons-vue'
+import { computed, ref } from 'vue'
+import { message } from 'ant-design-vue'
+import {
+  LikeOutlined,
+  DislikeOutlined,
+  BulbOutlined,
+  CopyOutlined,
+  DownOutlined,
+  UpOutlined,
+} from '@ant-design/icons-vue'
 import type { RiskItem, RiskLevel, ConfidenceLevel } from '@/api/review'
 import type { RiskFeedbackStat, FeedbackType } from '@/api/feedback'
 
@@ -34,8 +42,23 @@ const myFeedback = computed(() => props.feedbackStat?.myFeedback)
 const falsePositiveCount = computed(() => props.feedbackStat?.falsePositiveCount ?? 0)
 const confirmedCount = computed(() => props.feedbackStat?.confirmedCount ?? 0)
 
+const hasSuggestedFix = computed(
+  () => !!props.risk.suggestedFix && props.risk.suggestedFix.trim().length > 0,
+)
+const fixExpanded = ref(false)
+
 function handleFeedback(feedback: FeedbackType) {
   emit('feedback', props.riskIndex, feedback)
+}
+
+async function copyFix() {
+  if (!props.risk.suggestedFix) return
+  try {
+    await navigator.clipboard.writeText(props.risk.suggestedFix)
+    message.success('已复制修复代码')
+  } catch {
+    message.error('复制失败，请手动选择文本复制')
+  }
 }
 </script>
 
@@ -49,6 +72,26 @@ function handleFeedback(feedback: FeedbackType) {
       </span>
     </div>
     <div class="risk-desc">{{ risk.description }}</div>
+
+    <div v-if="hasSuggestedFix" class="fix-block">
+      <div class="fix-head" @click="fixExpanded = !fixExpanded">
+        <BulbOutlined class="fix-icon" />
+        <span class="fix-title">修复建议</span>
+        <a-tag color="green" class="fix-tag">AI</a-tag>
+        <span class="fix-toggle">
+          <component :is="fixExpanded ? UpOutlined : DownOutlined" />
+        </span>
+      </div>
+      <div v-if="fixExpanded" class="fix-body">
+        <div class="fix-toolbar">
+          <a-button size="small" type="text" @click.stop="copyFix">
+            <template #icon><CopyOutlined /></template>
+            复制
+          </a-button>
+        </div>
+        <pre class="fix-code"><code>{{ risk.suggestedFix }}</code></pre>
+      </div>
+    </div>
 
     <div class="risk-footer">
       <a-space>
@@ -114,6 +157,67 @@ function handleFeedback(feedback: FeedbackType) {
   color: rgba(0, 0, 0, 0.85);
   line-height: 1.6;
   font-size: 14px;
+}
+.fix-block {
+  margin-top: 10px;
+  border: 1px solid #d9f7be;
+  border-radius: 6px;
+  background: #f6ffed;
+  overflow: hidden;
+}
+.fix-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.85);
+  transition: background .15s;
+}
+.fix-head:hover {
+  background: #e6ffe0;
+}
+.fix-icon {
+  color: #52c41a;
+  font-size: 14px;
+}
+.fix-title {
+  font-weight: 600;
+}
+.fix-tag {
+  margin: 0 0 0 4px;
+  font-size: 11px;
+  line-height: 16px;
+}
+.fix-toggle {
+  margin-left: auto;
+  color: rgba(0, 0, 0, 0.45);
+  font-size: 12px;
+}
+.fix-body {
+  border-top: 1px solid #d9f7be;
+  background: #fff;
+}
+.fix-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 4px 8px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.fix-code {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: rgba(0, 0, 0, 0.85);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: #fafafa;
+  max-height: 320px;
+  overflow: auto;
 }
 .risk-footer {
   margin-top: 12px;

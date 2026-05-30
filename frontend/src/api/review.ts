@@ -9,6 +9,7 @@ export interface RiskItem {
   line: number | null
   description: string
   confidence: ConfidenceLevel
+  suggestedFix?: string | null
 }
 
 export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
