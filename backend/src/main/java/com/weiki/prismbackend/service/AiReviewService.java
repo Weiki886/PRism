@@ -32,6 +32,7 @@ public class AiReviewService {
             - 如果已有评论提到了某个问题，不要重复指出
             - 对于不确定的风险，标注较低的风险等级
             - 为每个风险评估置信度，帮助使用者识别可能的误报
+            - 对可以明确给出修改方案的风险，提供修复后的参考代码片段（suggestedFix）
 
             返回格式：
             {
@@ -42,7 +43,8 @@ public class AiReviewService {
                   "file": "文件路径",
                   "line": 行号整数或null,
                   "description": "风险描述，说明具体问题和可能的影响",
-                  "confidence": "HIGH|MEDIUM|LOW"
+                  "confidence": "HIGH|MEDIUM|LOW",
+                  "suggestedFix": "修复后的参考代码片段；无法给出明确修改时为 null"
                 }
               ],
               "suggestions": ["改进建议1", "改进建议2"]
@@ -129,6 +131,7 @@ public class AiReviewService {
                         .line(r.get("line") instanceof Number n ? n.intValue() : null)
                         .description((String) r.get("description"))
                         .confidence(confidence != null ? confidence : "MEDIUM")
+                        .suggestedFix((String) r.get("suggestedFix"))
                         .build());
             }
 
