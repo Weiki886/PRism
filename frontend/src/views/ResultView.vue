@@ -1,41 +1,181 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { message } from 'ant-design-vue'
-import { ArrowLeftOutlined, FileTextOutlined, WarningOutlined, BulbOutlined } from '@ant-design/icons-vue'
-import type { ReviewResponse } from '@/api/review'
-import { getFeedbackStats, submitFeedback, type FeedbackType, type RiskFeedbackStat } from '@/api/feedback'
+import {
+  ArrowLeftOutlined,
+  FileTextOutlined,
+  WarningOutlined,
+  BulbOutlined,
+  LoadingOutlined,
+} from '@ant-design/icons-vue'
+import { getReview, type ReviewResponse } from '@/api/review'
+import {
+  getFeedbackStats,
+  submitFeedback,
+  type FeedbackType,
+  type RiskFeedbackStat,
+} from '@/api/feedback'
+import { useReviewTaskStore } from '@/stores/reviewTasks'
 import RiskItem from '@/components/RiskItem.vue'
 
-const props = defineProps<{ review: ReviewResponse }>()
+const props = defineProps<{ reviewId: string }>()
 defineEmits<{
   (e: 'reset'): void
 }>()
 
-const feedbackStats = ref<RiskFeedbackStat[]>([])
-const loading = ref(false)
+const taskStore = useReviewTaskStore()
 
-onMounted(async () => {
-  await loadFeedbackStats()
+const review = ref<ReviewResponse | null>(null)
+const feedbackStats = ref<RiskFeedbackStat[]>([])
+const fetchError = ref('')
+const feedbackLoading = ref(false)
+const elapsed = ref(0)
+
+let elapsedTimer: ReturnType<typeof setInterval> | null = null
+let stopped = false
+
+const task = computed(() => taskStore.tasks.find((t) => t.id === props.reviewId))
+
+const status = computed<'submitting' | 'pending' | 'processing' | 'completed' | 'error'>(() => {
+  if (review.value) return review.value.status
+  return task.value?.status ?? 'pending'
+})
+const isPending = computed(
+  () => status.value === 'submitting' || status.value === 'pending' || status.value === 'processing',
+)
+const isError = computed(() => status.value === 'error')
+const isCompleted = computed(() => status.value === 'completed')
+
+const submitError = computed(() =>
+  task.value?.status === 'error' && !review.value ? task.value.submitError : '',
+)
+
+const progressPercent = computed(() => {
+  if (isCompleted.value) return 100
+  if (isError.value) return 100
+  if (status.value === 'processing') return 65
+  if (status.value === 'pending') return 35
+  return 15
 })
 
-async function loadFeedbackStats() {
+const statusText = computed(() => {
+  switch (status.value) {
+    case 'submitting':
+      return '正在提交分析任务'
+    case 'pending':
+      return '排队中：任务已提交，等待开始分析'
+    case 'processing':
+      return 'AI 正在阅读代码变更并生成报告'
+    case 'completed':
+      return '分析完成'
+    case 'error':
+      return '分析失败'
+    default:
+      return ''
+  }
+})
+
+const sortedRisks = computed(() => {
+  if (!review.value) return []
+  const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const
+  return [...review.value.risks].sort(
+    (a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9),
+  )
+})
+
+const riskStats = computed(() => {
+  const stats = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
+  if (!review.value) return stats
+  for (const r of review.value.risks) {
+    if (r.level in stats) stats[r.level]++
+  }
+  return stats
+})
+
+startElapsedTimer()
+
+watch(
+  () => props.reviewId,
+  (id) => {
+    review.value = null
+    feedbackStats.value = []
+    fetchError.value = ''
+    elapsed.value = 0
+    if (id) fetchOnce()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => task.value?.status,
+  (s) => {
+    // store 轮询拿到 completed/error 后，刷一次完整数据用于渲染详情
+    if (s === 'completed' || s === 'error') {
+      fetchOnce()
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  stopped = true
+  clearTimers()
+})
+
+function clearTimers() {
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer)
+    elapsedTimer = null
+  }
+}
+
+function startElapsedTimer() {
+  if (elapsedTimer) return
+  elapsedTimer = setInterval(() => {
+    elapsed.value += 1
+  }, 1000)
+}
+
+async function fetchOnce() {
+  if (stopped || !props.reviewId) return
   try {
-    feedbackStats.value = await getFeedbackStats(props.review.id)
+    const data = await getReview(props.reviewId)
+    review.value = data
+    fetchError.value = ''
+    if (data.status === 'completed') {
+      clearTimers()
+      await loadFeedbackStats()
+    } else if (data.status === 'error') {
+      clearTimers()
+    }
+  } catch (err: unknown) {
+    const e = err as { response?: { data?: { message?: string } }; message?: string }
+    fetchError.value =
+      e?.response?.data?.message ??
+      e?.message ??
+      '获取分析结果失败'
+  }
+}
+
+async function loadFeedbackStats() {
+  if (!props.reviewId) return
+  try {
+    feedbackStats.value = await getFeedbackStats(props.reviewId)
   } catch {
-    // 静默失败，不影响主流程
+    // 静默失败
   }
 }
 
 async function handleFeedback(riskIndex: number, feedback: FeedbackType) {
-  loading.value = true
+  if (!props.reviewId) return
+  feedbackLoading.value = true
   try {
-    await submitFeedback(props.review.id, { riskIndex, feedback })
+    await submitFeedback(props.reviewId, { riskIndex, feedback })
     message.success(feedback === 'CONFIRMED' ? '已确认该风险' : '已标记为误报')
     await loadFeedbackStats()
   } catch {
     // 拦截器已处理错误提示
   } finally {
-    loading.value = false
+    feedbackLoading.value = false
   }
 }
 
@@ -43,21 +183,19 @@ function getFeedbackStatByIndex(index: number): RiskFeedbackStat | undefined {
   return feedbackStats.value.find((s) => s.riskIndex === index)
 }
 
-const isError = computed(() => props.review.status === 'error')
-const sortedRisks = computed(() => {
-  const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 } as const
-  return [...props.review.risks].sort(
-    (a, b) => (order[a.level] ?? 9) - (order[b.level] ?? 9),
-  )
+const headerTagColor = computed(() => {
+  if (isError.value) return 'error'
+  if (isCompleted.value) return 'success'
+  return 'processing'
 })
-
-const riskStats = computed(() => {
-  const stats = { CRITICAL: 0, HIGH: 0, MEDIUM: 0, LOW: 0 }
-  for (const r of props.review.risks) {
-    if (r.level in stats) stats[r.level]++
-  }
-  return stats
+const headerTagText = computed(() => {
+  if (isError.value) return '分析失败'
+  if (isCompleted.value) return '分析完成'
+  if (status.value === 'processing') return '分析中'
+  if (status.value === 'pending') return '排队中'
+  return '提交中'
 })
+const headerSubTitle = computed(() => `#${props.reviewId}`)
 </script>
 
 <template>
@@ -65,38 +203,36 @@ const riskStats = computed(() => {
     <div class="container">
       <a-page-header
         class="page-header"
-        :title="review.prTitle || '(无标题)'"
-        :sub-title="`#${review.id}`"
+        :title="review?.prTitle || (isError ? '分析失败' : '正在准备分析…')"
+        :sub-title="headerSubTitle"
         @back="$emit('reset')"
       >
         <template #backIcon>
           <ArrowLeftOutlined />
         </template>
         <template #tags>
-          <a-tag :color="isError ? 'error' : 'success'">
-            {{ isError ? '分析失败' : '分析完成' }}
-          </a-tag>
+          <a-tag :color="headerTagColor">{{ headerTagText }}</a-tag>
         </template>
         <template #extra>
           <a-button @click="$emit('reset')">
             <template #icon><ArrowLeftOutlined /></template>
-            重新分析
+            返回首页
           </a-button>
         </template>
 
         <a-descriptions size="small" :column="{ xs: 1, sm: 2, md: 3 }">
           <a-descriptions-item label="作者">
-            {{ review.author || '未知' }}
+            {{ review?.author || '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="风险总数">
-            {{ review.risks.length }}
+            {{ isCompleted ? review?.risks.length ?? 0 : '—' }}
           </a-descriptions-item>
           <a-descriptions-item label="改进建议数">
-            {{ review.suggestions.length }}
+            {{ isCompleted ? review?.suggestions.length ?? 0 : '—' }}
           </a-descriptions-item>
         </a-descriptions>
 
-        <div v-if="!isError && review.risks.length" class="risk-stats">
+        <div v-if="isCompleted && review && review.risks.length" class="risk-stats">
           <a-tag color="red">严重 {{ riskStats.CRITICAL }}</a-tag>
           <a-tag color="volcano">高 {{ riskStats.HIGH }}</a-tag>
           <a-tag color="gold">中 {{ riskStats.MEDIUM }}</a-tag>
@@ -104,33 +240,70 @@ const riskStats = computed(() => {
         </div>
       </a-page-header>
 
-      <a-card :bordered="false" class="section">
+      <a-card v-if="submitError" :bordered="false" class="section">
+        <a-alert
+          type="error"
+          show-icon
+          :message="submitError"
+          description="可返回首页修改 PR 链接后重试。"
+        />
+      </a-card>
+
+      <a-card v-else-if="isPending" :bordered="false" class="section progress-card">
+        <div class="progress-head">
+          <LoadingOutlined class="progress-icon" spin />
+          <div>
+            <div class="progress-title">{{ statusText }}</div>
+            <div class="progress-sub">
+              已用时 {{ elapsed }}s。系统每 2 秒自动刷新一次状态，期间可返回首页提交其他 PR。
+            </div>
+          </div>
+        </div>
+        <a-progress
+          :percent="progressPercent"
+          :show-info="false"
+          status="active"
+          stroke-color="#1677ff"
+        />
+        <a-alert
+          v-if="fetchError"
+          class="progress-alert"
+          type="warning"
+          show-icon
+          :message="fetchError"
+        />
+      </a-card>
+
+      <a-card v-if="!submitError" :bordered="false" class="section">
         <template #title>
           <FileTextOutlined />
           <span class="section-title-text">变更摘要</span>
         </template>
+        <a-skeleton v-if="isPending" active :paragraph="{ rows: 3 }" />
         <a-alert
-          v-if="isError"
+          v-else-if="isError"
           type="error"
           show-icon
-          :message="review.summary || '（无摘要）'"
+          :message="review?.summary || '分析失败，请稍后重试'"
         />
         <a-typography-paragraph v-else class="summary">
-          {{ review.summary || '（无摘要）' }}
+          {{ review?.summary || '（无摘要）' }}
         </a-typography-paragraph>
       </a-card>
 
-      <a-card :bordered="false" class="section">
+      <a-card v-if="!submitError && !isError" :bordered="false" class="section">
         <template #title>
           <WarningOutlined />
           <span class="section-title-text">风险列表</span>
           <a-badge
-            :count="review.risks.length"
+            v-if="isCompleted"
+            :count="review?.risks.length ?? 0"
             :number-style="{ backgroundColor: '#1677ff' }"
             class="title-badge"
           />
         </template>
-        <a-spin :spinning="loading">
+        <a-skeleton v-if="isPending" active :paragraph="{ rows: 4 }" />
+        <a-spin v-else :spinning="feedbackLoading">
           <div v-if="sortedRisks.length" class="risk-list">
             <RiskItem
               v-for="(risk, i) in sortedRisks"
@@ -145,18 +318,20 @@ const riskStats = computed(() => {
         </a-spin>
       </a-card>
 
-      <a-card :bordered="false" class="section">
+      <a-card v-if="!submitError && !isError" :bordered="false" class="section">
         <template #title>
           <BulbOutlined />
           <span class="section-title-text">改进建议</span>
           <a-badge
-            :count="review.suggestions.length"
+            v-if="isCompleted"
+            :count="review?.suggestions.length ?? 0"
             :number-style="{ backgroundColor: '#1677ff' }"
             class="title-badge"
           />
         </template>
+        <a-skeleton v-if="isPending" active :paragraph="{ rows: 3 }" />
         <a-list
-          v-if="review.suggestions.length"
+          v-else-if="review && review.suggestions.length"
           size="small"
           :data-source="review.suggestions"
           :split="true"
@@ -227,5 +402,33 @@ const riskStats = computed(() => {
 .suggestion-text {
   color: rgba(0, 0, 0, 0.85);
   line-height: 1.6;
+}
+.progress-card {
+  border: 1px solid #e6f4ff;
+  background: #f5faff;
+}
+.progress-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.progress-icon {
+  font-size: 22px;
+  color: #1677ff;
+  margin-top: 2px;
+}
+.progress-title {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 15px;
+}
+.progress-sub {
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 13px;
+  margin-top: 2px;
+}
+.progress-alert {
+  margin-top: 12px;
 }
 </style>

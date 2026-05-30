@@ -25,6 +25,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/HomePage.vue'),
         meta: { title: 'PR 审查' },
       },
+      {
+        path: 'review/:id',
+        name: 'review-detail',
+        component: () => import('@/views/ReviewDetailView.vue'),
+        meta: { title: '分析详情' },
+      },
     ],
   },
   {
