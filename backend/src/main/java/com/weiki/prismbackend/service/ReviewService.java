@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weiki.prismbackend.mapper.ReviewMapper;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.ContextInfo;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import org.springframework.stereotype.Service;
@@ -136,6 +137,15 @@ public class ReviewService {
             return objectMapper.readValue(suggestionsJson, new TypeReference<>() {});
         } catch (Exception e) {
             return List.of();
+        }
+    }
+
+    public ContextInfo parseContextInfo(String contextInfoJson) {
+        if (contextInfoJson == null || contextInfoJson.isBlank()) return null;
+        try {
+            return objectMapper.readValue(contextInfoJson, ContextInfo.class);
+        } catch (Exception e) {
+            return null;
         }
     }
 

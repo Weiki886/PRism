@@ -40,6 +40,11 @@ public class GitHubService {
 
         String headSha = (String) ((Map<String, Object>) prDetails.get("head")).get("sha");
 
+        String diff = buildDiff(files);
+        String commitMessages = fetchCommitMessages(owner, repo, prNumber);
+        String reviewComments = fetchReviewComments(owner, repo, prNumber);
+        String fileContexts = fetchFileContents(owner, repo, headSha, files);
+
         Map<String, Object> result = new HashMap<>();
         result.put("owner", owner);
         result.put("repo", repo);
@@ -47,10 +52,17 @@ public class GitHubService {
         result.put("title", prDetails.get("title"));
         result.put("author", ((Map<String, Object>) prDetails.get("user")).get("login"));
         result.put("body", prDetails.getOrDefault("body", ""));
-        result.put("diff", buildDiff(files));
-        result.put("commitMessages", fetchCommitMessages(owner, repo, prNumber));
-        result.put("reviewComments", fetchReviewComments(owner, repo, prNumber));
-        result.put("fileContexts", fetchFileContents(owner, repo, headSha, files));
+        result.put("diff", diff);
+        result.put("commitMessages", commitMessages);
+        result.put("reviewComments", reviewComments);
+        result.put("fileContexts", fileContexts);
+
+        // 上下文统计信息，用于向使用者透明化展示本次分析的上下文获取情况
+        result.put("changedFiles", files != null ? files.size() : 0);
+        result.put("diffTokens", diff.length() / 4);
+        result.put("hasCommitMessages", !commitMessages.isBlank());
+        result.put("hasReviewComments", !reviewComments.isBlank());
+        result.put("hasFileContexts", !fileContexts.isBlank());
         return result;
     }
 
