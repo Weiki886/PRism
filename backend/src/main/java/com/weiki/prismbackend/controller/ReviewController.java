@@ -162,6 +162,7 @@ public class ReviewController {
                 .suggestions(reviewService.parseSuggestions(r.getSuggestionsJson()))
                 .healthScore(healthScore)
                 .mergeAdvice(mergeAdvice)
+                .contextInfo(reviewService.parseContextInfo(r.getContextInfoJson()))
                 .status(r.getStatus())
                 .build();
     }

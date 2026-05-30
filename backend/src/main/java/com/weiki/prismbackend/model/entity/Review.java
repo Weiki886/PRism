@@ -33,6 +33,8 @@ public class Review {
 
     private String suggestionsJson;
 
+    private String contextInfoJson;
+
     private String status;
 
     private String ghRepo;

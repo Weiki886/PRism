@@ -1,5 +1,6 @@
 package com.weiki.prismbackend.model;
 
+import com.weiki.prismbackend.model.dto.ContextInfo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -30,6 +31,8 @@ public class ReviewResponse {
     private Integer healthScore;
     @Schema(description = "合并建议：RECOMMEND（推荐合并）/ CAUTION（谨慎合并）/ NOT_RECOMMEND（不推荐合并）", example = "CAUTION")
     private String mergeAdvice;
+    @Schema(description = "本次分析使用的上下文信息")
+    private ContextInfo contextInfo;
     @Schema(description = "状态：pending（待处理）/ processing（分析中）/ completed（完成）/ error（失败）", example = "completed")
     private String status;
 }

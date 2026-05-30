@@ -24,6 +24,7 @@ CREATE TABLE IF NOT EXISTS `review` (
     `summary`     TEXT,
     `risks_json`  TEXT,
     `suggestions_json` TEXT,
+    `context_info_json` TEXT COMMENT '本次分析使用的上下文信息（JSON）',
     `status`      VARCHAR(20)  NOT NULL DEFAULT 'pending',
     `gh_repo`     VARCHAR(200) NOT NULL DEFAULT '',
     `gh_pr_number` VARCHAR(20)  NOT NULL DEFAULT '',
@@ -55,4 +56,7 @@ CREATE TABLE IF NOT EXISTS `risk_feedback` (
 # ALTER TABLE `user`          ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
 # ALTER TABLE `review`        ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
 # ALTER TABLE `risk_feedback` ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
+
+# 若 review 表无 context_info_json 列，执行：
+# ALTER TABLE `review` ADD COLUMN `context_info_json` TEXT COMMENT '本次分析使用的上下文信息（JSON）';
 -- ============================================================

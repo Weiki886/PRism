@@ -1,9 +1,12 @@
 package com.weiki.prismbackend.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.ContextInfo;
 import com.weiki.prismbackend.model.entity.Review;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -26,13 +29,19 @@ public class ReviewProcessor {
     private final GitHubService gitHubService;
     private final AiReviewService aiReviewService;
     private final ReviewService reviewService;
+    private final ObjectMapper objectMapper;
+
+    @Value("${spring.ai.openai.chat.options.model:qwen-max}")
+    private String model;
 
     public ReviewProcessor(GitHubService gitHubService,
                            AiReviewService aiReviewService,
-                           ReviewService reviewService) {
+                           ReviewService reviewService,
+                           ObjectMapper objectMapper) {
         this.gitHubService = gitHubService;
         this.aiReviewService = aiReviewService;
         this.reviewService = reviewService;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -73,12 +82,23 @@ public class ReviewProcessor {
             List<RiskItem> mergedRisks = new ArrayList<>(result.getRisks());
             mergedRisks.addAll(StaticRuleScanner.scan((String) prInfo.get("diff")));
 
+            // 收集本次分析使用的上下文信息，供前端透明化展示
+            ContextInfo contextInfo = ContextInfo.builder()
+                    .changedFiles((int) prInfo.getOrDefault("changedFiles", 0))
+                    .diffTokens((int) prInfo.getOrDefault("diffTokens", 0))
+                    .includedCommitMessages((boolean) prInfo.getOrDefault("hasCommitMessages", false))
+                    .includedReviewComments((boolean) prInfo.getOrDefault("hasReviewComments", false))
+                    .includedFileContexts((boolean) prInfo.getOrDefault("hasFileContexts", false))
+                    .model(model)
+                    .build();
+
             // 写回分析结果
             review.setPrTitle(result.getPrTitle());
             review.setAuthor(result.getAuthor());
             review.setSummary(result.getSummary());
             review.setRisksJson(reviewService.risksToJson(mergedRisks));
             review.setSuggestionsJson(reviewService.suggestionsToJson(result.getSuggestions()));
+            review.setContextInfoJson(toJson(contextInfo));
             review.setStatus(result.getStatus());
             review.setGhRepo((String) prInfo.get("repo"));
             review.setGhPrNumber((String) prInfo.get("prNumber"));
@@ -91,6 +111,15 @@ public class ReviewProcessor {
             review.setStatus("error");
             review.setSummary("分析失败：" + e.getMessage());
             reviewService.updateReview(review);
+        }
+    }
+
+    private String toJson(ContextInfo contextInfo) {
+        try {
+            return objectMapper.writeValueAsString(contextInfo);
+        } catch (Exception e) {
+            log.warn("序列化 ContextInfo 失败: {}", e.getMessage());
+            return null;
         }
     }
 }
