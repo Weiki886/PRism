@@ -26,6 +26,6 @@ public class ReviewResponse {
     private List<RiskItem> risks;
     @Schema(description = "改进建议列表")
     private List<String> suggestions;
-    @Schema(description = "状态：completed / error", example = "completed")
+    @Schema(description = "状态：pending（待处理）/ processing（分析中）/ completed（完成）/ error（失败）", example = "completed")
     private String status;
 }
