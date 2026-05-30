@@ -9,7 +9,7 @@ import {
   DownOutlined,
   UpOutlined,
 } from '@ant-design/icons-vue'
-import type { RiskItem, RiskLevel, ConfidenceLevel } from '@/api/review'
+import type { RiskItem, RiskLevel, ConfidenceLevel, RiskSource } from '@/api/review'
 import type { RiskFeedbackStat, FeedbackType } from '@/api/feedback'
 
 const props = defineProps<{
@@ -35,8 +35,16 @@ const confidenceMeta: Record<ConfidenceLevel, { label: string; color: string }> 
   LOW:    { label: '低置信', color: 'default' },
 }
 
+const sourceMeta: Record<RiskSource, { label: string; color: string; tip: string }> = {
+  AI:   { label: 'AI 分析',  color: 'purple', tip: '由 AI 模型语义分析得出' },
+  RULE: { label: '规则引擎', color: 'cyan',   tip: '由静态规则扫描器命中，确定性强' },
+}
+
 const meta = computed(() => levelMeta[props.risk.level] ?? { label: props.risk.level, color: 'default' })
 const confidenceMeta2 = computed(() => confidenceMeta[props.risk.confidence] ?? { label: props.risk.confidence, color: 'default' })
+const sourceMeta2 = computed(() =>
+  props.risk.source ? sourceMeta[props.risk.source] : null,
+)
 
 const myFeedback = computed(() => props.feedbackStat?.myFeedback)
 const falsePositiveCount = computed(() => props.feedbackStat?.falsePositiveCount ?? 0)
@@ -67,6 +75,9 @@ async function copyFix() {
     <div class="risk-head">
       <a-tag :color="meta.color" class="risk-level">{{ meta.label }}</a-tag>
       <a-tag :color="confidenceMeta2.color" class="confidence-tag">{{ confidenceMeta2.label }}</a-tag>
+      <a-tooltip v-if="sourceMeta2" :title="sourceMeta2.tip">
+        <a-tag :color="sourceMeta2.color" class="source-tag">{{ sourceMeta2.label }}</a-tag>
+      </a-tooltip>
       <span class="risk-file">
         {{ risk.file }}<span v-if="risk.line != null" class="risk-line"> : L{{ risk.line }}</span>
       </span>
@@ -140,6 +151,10 @@ async function copyFix() {
   font-weight: 600;
 }
 .confidence-tag {
+  margin-right: 0;
+  font-size: 12px;
+}
+.source-tag {
   margin-right: 0;
   font-size: 12px;
 }

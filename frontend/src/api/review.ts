@@ -2,6 +2,7 @@ import request from './request'
 
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
 export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+export type RiskSource = 'AI' | 'RULE'
 
 export interface RiskItem {
   level: RiskLevel
@@ -10,6 +11,7 @@ export interface RiskItem {
   description: string
   confidence: ConfidenceLevel
   suggestedFix?: string | null
+  source?: RiskSource
 }
 
 export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
