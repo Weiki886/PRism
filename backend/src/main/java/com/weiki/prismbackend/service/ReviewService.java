@@ -27,6 +27,10 @@ public class ReviewService {
         reviewMapper.insert(review);
     }
 
+    public void updateReview(Review review) {
+        reviewMapper.updateById(review);
+    }
+
     public Optional<Review> findById(String id) {
         return Optional.ofNullable(reviewMapper.selectById(id));
     }

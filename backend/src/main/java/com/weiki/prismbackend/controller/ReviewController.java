@@ -1,116 +1,104 @@
 package com.weiki.prismbackend.controller;
 
 import com.weiki.prismbackend.common.Result;
+import com.weiki.prismbackend.common.ResultCode;
+import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
-import com.weiki.prismbackend.service.AiReviewService;
-import com.weiki.prismbackend.service.GitHubService;
+import com.weiki.prismbackend.service.ReviewProcessor;
 import com.weiki.prismbackend.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
-import org.springframework.http.ResponseEntity;
+import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-import java.util.Map;
+import java.util.UUID;
 
 @Tag(name = "PR Review", description = "AI PR 代码审查接口")
 @RestController
 @RequestMapping("/api")
+@SecurityRequirement(name = "bearerAuth")
 public class ReviewController {
 
-    private final GitHubService gitHubService;
-    private final AiReviewService aiReviewService;
     private final ReviewService reviewService;
+    private final ReviewProcessor reviewProcessor;
 
-    public ReviewController(
-            GitHubService gitHubService,
-            AiReviewService aiReviewService,
-            ReviewService reviewService) {
-        this.gitHubService = gitHubService;
-        this.aiReviewService = aiReviewService;
+    public ReviewController(ReviewService reviewService, ReviewProcessor reviewProcessor) {
         this.reviewService = reviewService;
+        this.reviewProcessor = reviewProcessor;
     }
 
-    @Operation(summary = "触发 PR 分析", description = "传入 GitHub PR 链接，调用 AI 进行代码审查，返回分析结果（同步，需 5~15 秒）")
+    @Operation(summary = "触发 PR 分析",
+            description = "传入 GitHub PR 链接，立即返回 reviewId 并在后台异步分析。"
+                    + "前端通过轮询 GET /api/review/{id} 获取进度，status 流转：pending → processing → completed / error")
     @PostMapping("/review")
-    public ResponseEntity<Result<ReviewResponse>> createReview(
-            @RequestBody ReviewRequest request,
+    public Result<ReviewResponse> createReview(
+            @Valid @RequestBody ReviewRequest request,
             @AuthenticationPrincipal SecurityUserPrincipal principal) {
 
-        Map<String, Object> prInfo = gitHubService.getPrInfo(request.getPrUrl());
+        String reviewId = "review_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 
-        ReviewResponse aiResult = aiReviewService.analyze(
-                (String) prInfo.get("title"),
-                (String) prInfo.get("body"),
-                (String) prInfo.get("diff"),
-                (String) prInfo.get("author"),
-                (String) prInfo.get("commitMessages"),
-                (String) prInfo.get("reviewComments"),
-                (String) prInfo.get("fileContexts")
-        );
-
+        // 先落库一条 pending 记录，再异步分析
         Review review = Review.builder()
-                .id(aiResult.getId())
+                .id(reviewId)
                 .prUrl(request.getPrUrl())
-                .prTitle(aiResult.getPrTitle())
-                .author(aiResult.getAuthor())
+                .prTitle("")
+                .author("")
                 .userId(principal.getUserId())
-                .summary(aiResult.getSummary())
-                .risksJson(reviewService.risksToJson(aiResult.getRisks()))
-                .suggestionsJson(reviewService.suggestionsToJson(aiResult.getSuggestions()))
-                .status(aiResult.getStatus())
-                .ghRepo((String) prInfo.get("repo"))
-                .ghPrNumber((String) prInfo.get("prNumber"))
+                .status("pending")
+                .ghRepo("")
+                .ghPrNumber("")
                 .build();
-
         reviewService.saveReview(review);
-        return ResponseEntity.ok(Result.success(aiResult));
+
+        reviewProcessor.process(reviewId, request.getPrUrl());
+
+        ReviewResponse resp = ReviewResponse.builder()
+                .id(reviewId)
+                .status("pending")
+                .build();
+        return Result.success(resp);
     }
 
-    @Operation(summary = "查询分析结果", description = "根据 review id 查询已有的分析结果")
+    @Operation(summary = "查询分析结果",
+            description = "根据 review id 查询分析进度和结果，用于前端轮询")
     @GetMapping("/review/{id}")
-    public ResponseEntity<Result<ReviewResponse>> getReview(
+    public Result<ReviewResponse> getReview(
             @Parameter(description = "review id") @PathVariable String id) {
-        return reviewService.findById(id)
-                .map(r -> {
-                    ReviewResponse resp = ReviewResponse.builder()
-                            .id(r.getId())
-                            .prTitle(r.getPrTitle())
-                            .author(r.getAuthor())
-                            .summary(r.getSummary())
-                            .risks(reviewService.parseRisks(r.getRisksJson()))
-                            .suggestions(reviewService.parseSuggestions(r.getSuggestionsJson()))
-                            .status(r.getStatus())
-                            .build();
-                    return ResponseEntity.ok(Result.success(resp));
-                })
-                .orElse(ResponseEntity.notFound().build());
+        Review r = reviewService.findById(id)
+                .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
+        return Result.success(toResponse(r));
     }
 
     @Operation(summary = "获取我的评审历史", description = "分页查询当前用户的评审记录")
     @GetMapping("/review/history")
-    public ResponseEntity<Result<List<ReviewResponse>>> getHistory(
+    public Result<List<ReviewResponse>> getHistory(
             @AuthenticationPrincipal SecurityUserPrincipal principal,
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "10") int size) {
 
-        List<Review> reviews = reviewService.findByUserId(principal.getUserId(), page, size);
-        List<ReviewResponse> list = reviews.stream()
-                .map(r -> ReviewResponse.builder()
-                        .id(r.getId())
-                        .prTitle(r.getPrTitle())
-                        .author(r.getAuthor())
-                        .summary(r.getSummary())
-                        .risks(reviewService.parseRisks(r.getRisksJson()))
-                        .suggestions(reviewService.parseSuggestions(r.getSuggestionsJson()))
-                        .status(r.getStatus())
-                        .build())
+        List<ReviewResponse> list = reviewService.findByUserId(principal.getUserId(), page, size)
+                .stream()
+                .map(this::toResponse)
                 .toList();
-        return ResponseEntity.ok(Result.success(list));
+        return Result.success(list);
+    }
+
+    private ReviewResponse toResponse(Review r) {
+        return ReviewResponse.builder()
+                .id(r.getId())
+                .prTitle(r.getPrTitle())
+                .author(r.getAuthor())
+                .summary(r.getSummary())
+                .risks(reviewService.parseRisks(r.getRisksJson()))
+                .suggestions(reviewService.parseSuggestions(r.getSuggestionsJson()))
+                .status(r.getStatus())
+                .build();
     }
 }
