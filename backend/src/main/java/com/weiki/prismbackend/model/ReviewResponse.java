@@ -26,6 +26,10 @@ public class ReviewResponse {
     private List<RiskItem> risks;
     @Schema(description = "改进建议列表")
     private List<String> suggestions;
+    @Schema(description = "PR 健康分（0-100），根据风险数量和等级综合计算，分数越高越健康", example = "78")
+    private Integer healthScore;
+    @Schema(description = "合并建议：RECOMMEND（推荐合并）/ CAUTION（谨慎合并）/ NOT_RECOMMEND（不推荐合并）", example = "CAUTION")
+    private String mergeAdvice;
     @Schema(description = "状态：pending（待处理）/ processing（分析中）/ completed（完成）/ error（失败）", example = "completed")
     private String status;
 }

@@ -5,9 +5,11 @@ import com.weiki.prismbackend.common.ResultCode;
 import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
+import com.weiki.prismbackend.model.RiskItem;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
+import com.weiki.prismbackend.service.HealthScoreCalculator;
 import com.weiki.prismbackend.service.ReviewProcessor;
 import com.weiki.prismbackend.service.ReviewService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -140,13 +142,26 @@ public class ReviewController {
     }
 
     private ReviewResponse toResponse(Review r) {
+        List<RiskItem> risks = reviewService.parseRisks(r.getRisksJson());
+
+        // 仅对已完成的分析计算健康分，其余状态保持为空
+        Integer healthScore = null;
+        String mergeAdvice = null;
+        if ("completed".equals(r.getStatus())) {
+            int score = HealthScoreCalculator.calculate(risks);
+            healthScore = score;
+            mergeAdvice = HealthScoreCalculator.mergeAdvice(score);
+        }
+
         return ReviewResponse.builder()
                 .id(r.getId())
                 .prTitle(r.getPrTitle())
                 .author(r.getAuthor())
                 .summary(r.getSummary())
-                .risks(reviewService.parseRisks(r.getRisksJson()))
+                .risks(risks)
                 .suggestions(reviewService.parseSuggestions(r.getSuggestionsJson()))
+                .healthScore(healthScore)
+                .mergeAdvice(mergeAdvice)
                 .status(r.getStatus())
                 .build();
     }
