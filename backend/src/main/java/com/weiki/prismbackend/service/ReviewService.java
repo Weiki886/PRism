@@ -35,6 +35,19 @@ public class ReviewService {
         return Optional.ofNullable(reviewMapper.selectById(id));
     }
 
+    /**
+     * 删除指定用户的某条审查记录。
+     * 通过 id + userId 双条件删除，确保用户只能删除自己的记录。
+     *
+     * @return 是否删除成功（记录不存在或不属于该用户时返回 false）
+     */
+    public boolean deleteByIdAndUser(String id, Long userId) {
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+                .eq(Review::getId, id)
+                .eq(Review::getUserId, userId);
+        return reviewMapper.delete(wrapper) > 0;
+    }
+
     public List<Review> findByUserId(Long userId, int page, int size) {
         Page<Review> p = new Page<>(page, size);
         LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()

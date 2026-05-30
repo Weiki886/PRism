@@ -90,6 +90,18 @@ public class ReviewController {
         return Result.success(list);
     }
 
+    @Operation(summary = "删除评审记录", description = "删除当前用户的某条评审记录，仅能删除属于自己的记录")
+    @DeleteMapping("/review/{id}")
+    public Result<Void> deleteReview(
+            @Parameter(description = "review id") @PathVariable String id,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+        boolean deleted = reviewService.deleteByIdAndUser(id, principal.getUserId());
+        if (!deleted) {
+            throw new BusinessException(ResultCode.NOT_FOUND);
+        }
+        return Result.success();
+    }
+
     private ReviewResponse toResponse(Review r) {
         return ReviewResponse.builder()
                 .id(r.getId())
