@@ -9,6 +9,7 @@ CREATE TABLE IF NOT EXISTS `user` (
     `role`       VARCHAR(20)  NOT NULL DEFAULT 'USER',
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_username` (`username`),
     UNIQUE KEY `uk_email` (`email`)
@@ -28,6 +29,7 @@ CREATE TABLE IF NOT EXISTS `review` (
     `gh_pr_number` VARCHAR(20)  NOT NULL DEFAULT '',
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
     INDEX `idx_user_id` (`user_id`),
     INDEX `idx_created_at` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -41,7 +43,16 @@ CREATE TABLE IF NOT EXISTS `risk_feedback` (
     `comment`    VARCHAR(500) DEFAULT '' COMMENT '反馈补充说明',
     `created_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`    TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
     PRIMARY KEY (`id`),
     UNIQUE KEY `uk_review_risk_user` (`review_id`, `risk_index`, `user_id`),
     INDEX `idx_review_id` (`review_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ============================================================
+# 已有数据库升级用（首次建库可忽略以下语句）
+# 若 user / review / risk_feedback 表已存在且无 deleted 列，执行：
+# ALTER TABLE `user`          ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
+# ALTER TABLE `review`        ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
+# ALTER TABLE `risk_feedback` ADD COLUMN `deleted` TINYINT NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除';
+-- ============================================================
