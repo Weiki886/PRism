@@ -11,6 +11,8 @@ export interface RiskItem {
   confidence: ConfidenceLevel
 }
 
+export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
+
 export interface ReviewResponse {
   id: string
   prTitle: string
@@ -18,7 +20,7 @@ export interface ReviewResponse {
   summary: string
   risks: RiskItem[]
   suggestions: string[]
-  status: 'completed' | 'error'
+  status: ReviewStatus
 }
 
 export async function createReview(prUrl: string): Promise<ReviewResponse> {
