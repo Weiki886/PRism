@@ -88,6 +88,17 @@ function openDetail(task: ReviewTask) {
   closeDrawer()
 }
 
+async function retryTask(task: ReviewTask, e?: Event) {
+  e?.stopPropagation()
+  if (!task.id) return
+  try {
+    await taskStore.retry(task.localId)
+    message.success('已重新加入分析队列')
+  } catch {
+    // 拦截器已提示
+  }
+}
+
 function removeTask(task: ReviewTask, e?: Event) {
   e?.stopPropagation()
   const isRemote = !!task.id && task.status !== 'submitting'
@@ -385,6 +396,15 @@ function relativeTime(ts: number) {
                   </span>
                 </div>
               </div>
+              <a-tooltip v-if="t.id && t.status === 'error'" title="重新分析">
+                <a-button
+                  type="text"
+                  size="small"
+                  @click="(e) => retryTask(t, e)"
+                >
+                  <template #icon><ReloadOutlined /></template>
+                </a-button>
+              </a-tooltip>
               <a-button
                 type="text"
                 size="small"
