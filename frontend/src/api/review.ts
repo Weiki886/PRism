@@ -1,12 +1,14 @@
 import request from './request'
 
 export type RiskLevel = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW'
+export type ConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 
 export interface RiskItem {
   level: RiskLevel
   file: string
   line: number | null
   description: string
+  confidence: ConfidenceLevel
 }
 
 export interface ReviewResponse {
