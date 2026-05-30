@@ -1,11 +1,14 @@
 package com.weiki.prismbackend.service;
 
 import com.weiki.prismbackend.model.ReviewResponse;
+import com.weiki.prismbackend.model.RiskItem;
 import com.weiki.prismbackend.model.entity.Review;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -66,11 +69,15 @@ public class ReviewProcessor {
                     (String) prInfo.get("fileContexts")
             );
 
+            // 静态规则扫描作为补充，与 AI 风险合并（规则保证确定性问题不漏报）
+            List<RiskItem> mergedRisks = new ArrayList<>(result.getRisks());
+            mergedRisks.addAll(StaticRuleScanner.scan((String) prInfo.get("diff")));
+
             // 写回分析结果
             review.setPrTitle(result.getPrTitle());
             review.setAuthor(result.getAuthor());
             review.setSummary(result.getSummary());
-            review.setRisksJson(reviewService.risksToJson(result.getRisks()));
+            review.setRisksJson(reviewService.risksToJson(mergedRisks));
             review.setSuggestionsJson(reviewService.suggestionsToJson(result.getSuggestions()));
             review.setStatus(result.getStatus());
             review.setGhRepo((String) prInfo.get("repo"));

@@ -132,6 +132,7 @@ public class AiReviewService {
                         .description((String) r.get("description"))
                         .confidence(confidence != null ? confidence : "MEDIUM")
                         .suggestedFix((String) r.get("suggestedFix"))
+                        .source("AI")
                         .build());
             }
 
