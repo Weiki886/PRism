@@ -36,6 +36,18 @@ public class ReviewService {
     }
 
     /**
+     * 按 id + userId 查询，用于需要校验记录归属的场景。
+     *
+     * @return 记录存在且属于该用户时返回，否则为空
+     */
+    public Optional<Review> findByIdAndUser(String id, Long userId) {
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+                .eq(Review::getId, id)
+                .eq(Review::getUserId, userId);
+        return Optional.ofNullable(reviewMapper.selectOne(wrapper));
+    }
+
+    /**
      * 删除指定用户的某条审查记录。
      * 通过 id + userId 双条件删除，确保用户只能删除自己的记录。
      *

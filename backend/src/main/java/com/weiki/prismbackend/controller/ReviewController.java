@@ -90,6 +90,35 @@ public class ReviewController {
         return Result.success(list);
     }
 
+    @Operation(summary = "重新分析",
+            description = "对已有评审记录重新触发分析（常用于 error 状态的重试），复用原 PR 链接，"
+                    + "在原记录上更新结果。正在分析中（pending/processing）的记录不可重试。")
+    @PostMapping("/review/{id}/retry")
+    public Result<ReviewResponse> retryReview(
+            @Parameter(description = "review id") @PathVariable String id,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+
+        Review review = reviewService.findByIdAndUser(id, principal.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
+
+        // 正在分析中的记录不允许重复触发，避免并发重复分析
+        if ("pending".equals(review.getStatus()) || "processing".equals(review.getStatus())) {
+            throw new BusinessException(ResultCode.REVIEW_IN_PROGRESS);
+        }
+
+        // 重置为 pending 后重新异步分析
+        review.setStatus("pending");
+        reviewService.updateReview(review);
+
+        reviewProcessor.process(id, review.getPrUrl());
+
+        ReviewResponse resp = ReviewResponse.builder()
+                .id(id)
+                .status("pending")
+                .build();
+        return Result.success(resp);
+    }
+
     @Operation(summary = "删除评审记录", description = "删除当前用户的某条评审记录，仅能删除属于自己的记录")
     @DeleteMapping("/review/{id}")
     public Result<Void> deleteReview(
