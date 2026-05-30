@@ -4,12 +4,15 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.weiki.prismbackend.common.ResultCode;
 import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.mapper.RiskFeedbackMapper;
+import com.weiki.prismbackend.model.dto.FeedbackOverview;
 import com.weiki.prismbackend.model.dto.RiskFeedbackRequest;
 import com.weiki.prismbackend.model.dto.RiskFeedbackStat;
 import com.weiki.prismbackend.model.entity.RiskFeedback;
 import com.weiki.prismbackend.model.enums.FeedbackType;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -89,5 +92,32 @@ public class RiskFeedbackService {
                     .build());
         }
         return stats;
+    }
+
+    /**
+     * 统计当前用户提交的全部反馈的误报率概览。
+     * 误报率 = 误报数 / 反馈总数，无反馈时为 0。
+     */
+    public FeedbackOverview overview(Long userId) {
+        List<RiskFeedback> all = feedbackMapper.selectList(new LambdaQueryWrapper<RiskFeedback>()
+                .eq(RiskFeedback::getUserId, userId));
+
+        long total = all.size();
+        long fp = all.stream()
+                .filter(f -> f.getFeedback() == FeedbackType.FALSE_POSITIVE).count();
+        long confirmed = all.stream()
+                .filter(f -> f.getFeedback() == FeedbackType.CONFIRMED).count();
+
+        double rate = total == 0 ? 0.0
+                : BigDecimal.valueOf(fp)
+                        .divide(BigDecimal.valueOf(total), 2, RoundingMode.HALF_UP)
+                        .doubleValue();
+
+        return FeedbackOverview.builder()
+                .totalFeedbacks(total)
+                .falsePositiveCount(fp)
+                .confirmedCount(confirmed)
+                .falsePositiveRate(rate)
+                .build();
     }
 }
