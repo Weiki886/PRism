@@ -24,4 +24,6 @@ public class RiskItem {
     private String confidence;
     @Schema(description = "修复建议代码片段，给出修改后的参考代码，可能为 null", example = "String hashed = passwordEncoder.encode(rawPassword);")
     private String suggestedFix;
+    @Schema(description = "风险来源：AI（模型分析）/ RULE（静态规则扫描）", example = "AI")
+    private String source;
 }
