@@ -1,6 +1,7 @@
 package com.weiki.prismbackend.controller;
 
 import com.weiki.prismbackend.common.Result;
+import com.weiki.prismbackend.model.dto.FeedbackOverview;
 import com.weiki.prismbackend.model.dto.RiskFeedbackRequest;
 import com.weiki.prismbackend.model.dto.RiskFeedbackStat;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
@@ -43,5 +44,12 @@ public class RiskFeedbackController {
             @Parameter(description = "review id") @PathVariable String reviewId,
             @AuthenticationPrincipal SecurityUserPrincipal principal) {
         return Result.success(feedbackService.getStats(reviewId, principal.getUserId()));
+    }
+
+    @Operation(summary = "查询我的误报率概览", description = "统计当前用户提交的全部反馈：反馈总数、误报数、确认数及误报率")
+    @GetMapping("/feedback-overview")
+    public Result<FeedbackOverview> getFeedbackOverview(
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+        return Result.success(feedbackService.overview(principal.getUserId()));
     }
 }
