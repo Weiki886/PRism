@@ -47,13 +47,7 @@ PRism 是一个面向开发者的 AI 代码审查工具。输入 GitHub PR 链�
 | 账户设置             | 修改个人信息、修改密码                                       |
 | 浏览历史             | 自动记录最近浏览的仓库，支持删除和清空                       |
 
-## 系统架构
 
-<!-- 将 docs/diagrams/architecture.puml 导出为 PNG 后放入 docs/images/ -->
-
-<p align="center">
-  <img src="docs/images/architecture.svg" alt="系统架构图" width="800" />
-</p>
 
 
 ## 快速启动
