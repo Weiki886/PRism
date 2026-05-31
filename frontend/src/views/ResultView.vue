@@ -8,9 +8,10 @@ import {
   LoadingOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  DownloadOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
-import { deleteReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
+import { deleteReview, exportReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
 import {
   getFeedbackStats,
   submitFeedback,
@@ -259,6 +260,21 @@ const headerTagText = computed(() => {
   return '提交中'
 })
 const headerSubTitle = computed(() => `#${props.reviewId}`)
+
+const exportLoading = ref<'md' | 'pdf' | null>(null)
+
+async function handleExport(format: 'md' | 'pdf') {
+  if (!props.reviewId || exportLoading.value) return
+  exportLoading.value = format
+  try {
+    await exportReview(props.reviewId, format)
+    message.success(`已导出 ${format.toUpperCase()} 报告`)
+  } catch {
+    message.error('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = null
+  }
+}
 </script>
 
 <template>
@@ -293,6 +309,24 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
               <template #icon><ReloadOutlined /></template>
               重新分析
             </a-button>
+            <template v-if="isCompleted">
+              <a-button
+                :loading="exportLoading === 'md'"
+                :disabled="exportLoading !== null && exportLoading !== 'md'"
+                @click="handleExport('md')"
+              >
+                <template #icon><DownloadOutlined /></template>
+                导出 Markdown
+              </a-button>
+              <a-button
+                :loading="exportLoading === 'pdf'"
+                :disabled="exportLoading !== null && exportLoading !== 'pdf'"
+                @click="handleExport('pdf')"
+              >
+                <template #icon><DownloadOutlined /></template>
+                导出 PDF
+              </a-button>
+            </template>
             <a-button
               v-if="isCompleted || isError"
               danger

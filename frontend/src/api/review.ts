@@ -71,3 +71,23 @@ export async function retryReview(id: string): Promise<ReviewResponse> {
   const res = await request.post<ReviewResponse>(`/api/review/${id}/retry`)
   return res.data
 }
+
+export async function exportReview(id: string, format: 'md' | 'pdf'): Promise<void> {
+  const res = await request.get(`/api/review/${id}/export`, {
+    params: { format },
+    responseType: 'blob',
+    silent: true,
+  })
+  const blob = res.data as Blob
+  const disposition = (res.headers as Record<string, string>)['content-disposition'] ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match?.[1] ?? `review-${id}.${format}`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
