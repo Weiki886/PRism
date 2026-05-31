@@ -18,6 +18,19 @@ export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
 
 export type MergeAdvice = 'RECOMMEND' | 'CAUTION' | 'NOT_RECOMMEND'
 
+export interface DuplicateInfo {
+  existingReviewId: string
+  status: ReviewStatus
+  prTitle: string
+}
+
+export class DuplicateError extends Error {
+  constructor(public readonly info: DuplicateInfo) {
+    super('REVIEW_DUPLICATE')
+    this.name = 'DuplicateError'
+  }
+}
+
 export interface ReviewResponse {
   id: string
   prTitle: string
@@ -39,7 +52,8 @@ export interface PageResult<T> {
 }
 
 export async function createReview(prUrl: string): Promise<ReviewResponse> {
-  const res = await request.post<ReviewResponse>('/api/review', { prUrl })
+  // silent:true — 错误由调用方处理（含 409 去重），避免拦截器重复弹 toast
+  const res = await request.post<ReviewResponse>('/api/review', { prUrl }, { silent: true })
   return res.data
 }
 
