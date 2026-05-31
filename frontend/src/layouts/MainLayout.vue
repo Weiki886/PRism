@@ -18,6 +18,7 @@ import {
   BarChartOutlined,
   SearchOutlined,
   CloseOutlined,
+  FolderOpenOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
@@ -238,6 +239,11 @@ function relativeTime(ts: number) {
         </router-link>
 
         <div class="actions">
+          <a-button type="text" class="nav-btn" @click="$router.push({ name: 'repo-browser' })">
+            <FolderOpenOutlined class="nav-icon" />
+            <span class="nav-btn-text">仓库</span>
+          </a-button>
+
           <a-button type="text" class="task-btn" @click="openDrawer">
             <a-badge
               :count="taskStore.inProgressCount"
@@ -609,6 +615,21 @@ function relativeTime(ts: number) {
   gap: 6px;
   height: 36px;
   padding: 0 12px;
+}
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+}
+.nav-icon {
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.7);
+}
+.nav-btn-text {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
 }
 .task-icon {
   font-size: 18px;

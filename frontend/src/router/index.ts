@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ReviewDetailView.vue'),
         meta: { title: '分析详情' },
       },
+      {
+        path: 'repo',
+        name: 'repo-browser',
+        component: () => import('@/views/RepoView.vue'),
+        meta: { title: '浏览仓库' },
+      },
     ],
   },
   {
