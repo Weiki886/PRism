@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
@@ -96,6 +96,8 @@ function openDrawer() {
     void taskStore.loadHistory()
   }
 }
+
+provide('openDrawer', openDrawer)
 
 function refreshHistory() {
   void taskStore.loadHistory()

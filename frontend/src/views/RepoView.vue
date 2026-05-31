@@ -1,6 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { inject, ref, computed } from 'vue'
 import { message } from 'ant-design-vue'
 import {
   GithubOutlined,
@@ -15,7 +14,7 @@ import {
 import { getRepoInfo, getRepoPulls, type RepoInfo, type RepoPullRequest } from '@/api/repo'
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 
-const router = useRouter()
+const openDrawer = inject<() => void>('openDrawer')
 const taskStore = useReviewTaskStore()
 
 const repoUrl = ref('')
@@ -102,7 +101,7 @@ async function analyzePr(pr: RepoPullRequest) {
   try {
     await taskStore.submit(pr.htmlUrl)
     message.success(`已将「${pr.title}」加入分析队列`)
-    router.push({ name: 'home' })
+    openDrawer?.()
   } catch {
     // 拦截器已提示
   } finally {
