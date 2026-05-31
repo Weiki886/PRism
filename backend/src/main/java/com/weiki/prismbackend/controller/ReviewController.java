@@ -6,16 +6,20 @@ import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.PageResult;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
 import com.weiki.prismbackend.service.HealthScoreCalculator;
+import com.weiki.prismbackend.service.ReviewExportService;
 import com.weiki.prismbackend.service.ReviewProcessor;
 import com.weiki.prismbackend.service.ReviewService;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
@@ -31,10 +35,13 @@ public class ReviewController {
 
     private final ReviewService reviewService;
     private final ReviewProcessor reviewProcessor;
+    private final ReviewExportService reviewExportService;
 
-    public ReviewController(ReviewService reviewService, ReviewProcessor reviewProcessor) {
+    public ReviewController(ReviewService reviewService, ReviewProcessor reviewProcessor,
+                            ReviewExportService reviewExportService) {
         this.reviewService = reviewService;
         this.reviewProcessor = reviewProcessor;
+        this.reviewExportService = reviewExportService;
     }
 
     @Operation(summary = "触发 PR 分析",
@@ -79,18 +86,20 @@ public class ReviewController {
         return Result.success(toResponse(r));
     }
 
-    @Operation(summary = "获取我的评审历史", description = "分页查询当前用户的评审记录")
+    @Operation(summary = "获取我的评审历史", description = "分页查询当前用户的评审记录，支持按关键词和状态搜索")
     @GetMapping("/review/history")
-    public Result<List<ReviewResponse>> getHistory(
+    public Result<PageResult<ReviewResponse>> getHistory(
             @AuthenticationPrincipal SecurityUserPrincipal principal,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "10") int size) {
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(required = false) String status) {
 
-        List<ReviewResponse> list = reviewService.findByUserId(principal.getUserId(), page, size)
-                .stream()
+        Page<Review> result = reviewService.searchByUserId(principal.getUserId(), page, size, keyword, status);
+        List<ReviewResponse> list = result.getRecords().stream()
                 .map(this::toResponse)
                 .toList();
-        return Result.success(list);
+        return Result.success(PageResult.of(list, result.getTotal(), page, size));
     }
 
     @Operation(summary = "重新分析",
@@ -139,6 +148,41 @@ public class ReviewController {
             throw new BusinessException(ResultCode.NOT_FOUND);
         }
         return Result.success();
+    }
+
+    @Operation(summary = "导出评审报告", description = "将评审结果导出为 Markdown 或 PDF 格式下载")
+    @GetMapping("/review/{id}/export")
+    public void exportReview(
+            @Parameter(description = "review id") @PathVariable String id,
+            @Parameter(description = "导出格式：md 或 pdf") @RequestParam(defaultValue = "md") String format,
+            @AuthenticationPrincipal SecurityUserPrincipal principal,
+            HttpServletResponse response) throws Exception {
+
+        Review review = reviewService.findByIdAndUser(id, principal.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
+
+        if (!"completed".equals(review.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST);
+        }
+
+        String filename = "review-" + id;
+
+        if ("pdf".equalsIgnoreCase(format)) {
+            byte[] pdfBytes = reviewExportService.exportPdf(review);
+            response.setContentType("application/pdf");
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + ".pdf\"");
+            response.setContentLength(pdfBytes.length);
+            response.getOutputStream().write(pdfBytes);
+            response.getOutputStream().flush();
+        } else {
+            String markdown = reviewExportService.exportMarkdown(review);
+            byte[] mdBytes = markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            response.setContentType("text/markdown; charset=UTF-8");
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + filename + ".md\"");
+            response.setContentLength(mdBytes.length);
+            response.getOutputStream().write(mdBytes);
+            response.getOutputStream().flush();
+        }
     }
 
     private ReviewResponse toResponse(Review r) {

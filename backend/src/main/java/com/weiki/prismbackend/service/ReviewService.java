@@ -73,6 +73,29 @@ public class ReviewService {
         return result.getRecords();
     }
 
+    /**
+     * 分页 + 搜索查询用户的评审记录。
+     *
+     * @param keyword 模糊匹配 prTitle 或 ghRepo（可为空）
+     * @param status  精确匹配状态（可为空）
+     */
+    public Page<Review> searchByUserId(Long userId, int page, int size, String keyword, String status) {
+        Page<Review> p = new Page<>(page, size);
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+                .eq(Review::getUserId, userId);
+
+        if (keyword != null && !keyword.isBlank()) {
+            String kw = "%" + keyword.trim() + "%";
+            wrapper.and(w -> w.like(Review::getPrTitle, kw).or().like(Review::getGhRepo, kw));
+        }
+        if (status != null && !status.isBlank()) {
+            wrapper.eq(Review::getStatus, status.trim());
+        }
+
+        wrapper.orderByDesc(Review::getCreatedAt);
+        return reviewMapper.selectPage(p, wrapper);
+    }
+
     public long countByUserId(Long userId) {
         return reviewMapper.selectCount(
                 new LambdaQueryWrapper<Review>().eq(Review::getUserId, userId)
