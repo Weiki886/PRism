@@ -35,6 +35,19 @@ public class ReviewService {
         reviewMapper.updateById(review);
     }
 
+    /**
+     * 查找指定用户对同一 PR URL 的已有分析记录（取最新一条）。
+     * 用于提交前去重检查。
+     */
+    public Optional<Review> findByUserIdAndPrUrl(Long userId, String prUrl) {
+        LambdaQueryWrapper<Review> wrapper = new LambdaQueryWrapper<Review>()
+                .eq(Review::getUserId, userId)
+                .eq(Review::getPrUrl, prUrl)
+                .orderByDesc(Review::getCreatedAt)
+                .last("LIMIT 1");
+        return Optional.ofNullable(reviewMapper.selectOne(wrapper));
+    }
+
     public Optional<Review> findById(String id) {
         return Optional.ofNullable(reviewMapper.selectById(id));
     }
