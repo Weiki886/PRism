@@ -6,6 +6,7 @@ import com.weiki.prismbackend.exception.BusinessException;
 import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.DuplicateReviewResponse;
 import com.weiki.prismbackend.model.dto.PageResult;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
@@ -25,6 +26,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 @Tag(name = "PR Review", description = "AI PR 代码审查接口")
@@ -46,11 +48,25 @@ public class ReviewController {
 
     @Operation(summary = "触发 PR 分析",
             description = "传入 GitHub PR 链接，立即返回 reviewId 并在后台异步分析。"
+                    + "若该用户已分析过同一 PR，返回 409 及已有记录信息，前端可引导用户查看或重新分析。"
                     + "前端通过轮询 GET /api/review/{id} 获取进度，status 流转：pending → processing → completed / error")
     @PostMapping("/review")
-    public Result<ReviewResponse> createReview(
+    public Result<?> createReview(
             @Valid @RequestBody ReviewRequest request,
             @AuthenticationPrincipal SecurityUserPrincipal principal) {
+
+        // 去重检查：同一用户 + 同一 PR URL
+        Optional<Review> existing = reviewService.findByUserIdAndPrUrl(
+                principal.getUserId(), request.getPrUrl());
+        if (existing.isPresent()) {
+            Review r = existing.get();
+            DuplicateReviewResponse dup = DuplicateReviewResponse.builder()
+                    .existingReviewId(r.getId())
+                    .status(r.getStatus())
+                    .prTitle(r.getPrTitle())
+                    .build();
+            return Result.error(ResultCode.REVIEW_DUPLICATE, dup);
+        }
 
         String reviewId = "review_" + UUID.randomUUID().toString().replace("-", "").substring(0, 12);
 

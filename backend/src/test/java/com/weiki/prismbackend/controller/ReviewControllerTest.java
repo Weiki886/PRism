@@ -2,8 +2,10 @@ package com.weiki.prismbackend.controller;
 
 import com.weiki.prismbackend.common.Result;
 import com.weiki.prismbackend.exception.BusinessException;
+import com.weiki.prismbackend.model.ReviewRequest;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
+import com.weiki.prismbackend.model.dto.DuplicateReviewResponse;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
@@ -164,5 +166,51 @@ class ReviewControllerTest {
         when(reviewService.deleteByIdAndUser("nonexist", 1L)).thenReturn(false);
 
         assertThrows(BusinessException.class, () -> controller.deleteReview("nonexist", principal()));
+    }
+
+    // ========== 去重检查测试 ==========
+
+    @Test
+    @DisplayName("createReview 同一 PR 已存在记录应返回 409 + 已有记录信息")
+    void createReview_duplicate_shouldReturn409() {
+        Review existing = Review.builder()
+                .id("review_existing123")
+                .prTitle("feat: add login")
+                .status("completed")
+                .build();
+        when(reviewService.findByUserIdAndPrUrl(1L, "https://github.com/owner/repo/pull/1"))
+                .thenReturn(Optional.of(existing));
+
+        ReviewRequest req = new ReviewRequest();
+        req.setPrUrl("https://github.com/owner/repo/pull/1");
+
+        Result<?> result = controller.createReview(req, principal());
+
+        assertEquals(409, result.getCode());
+        DuplicateReviewResponse dup = (DuplicateReviewResponse) result.getData();
+        assertEquals("review_existing123", dup.getExistingReviewId());
+        assertEquals("completed", dup.getStatus());
+        assertEquals("feat: add login", dup.getPrTitle());
+        // 不应触发新的分析
+        verify(reviewProcessor, never()).process(anyString(), anyString());
+    }
+
+    @Test
+    @DisplayName("createReview 无重复记录应正常创建")
+    void createReview_noDuplicate_shouldCreate() {
+        when(reviewService.findByUserIdAndPrUrl(1L, "https://github.com/owner/repo/pull/2"))
+                .thenReturn(Optional.empty());
+
+        ReviewRequest req = new ReviewRequest();
+        req.setPrUrl("https://github.com/owner/repo/pull/2");
+
+        Result<?> result = controller.createReview(req, principal());
+
+        assertEquals(200, result.getCode());
+        ReviewResponse resp = (ReviewResponse) result.getData();
+        assertEquals("pending", resp.getStatus());
+        assertNotNull(resp.getId());
+        // 应触发异步分析
+        verify(reviewProcessor).process(anyString(), eq("https://github.com/owner/repo/pull/2"));
     }
 }
