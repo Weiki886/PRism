@@ -57,6 +57,12 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
   const historyLoaded = ref(false)
   const pollTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+  // 历史记录分页元数据（与后端 PageResult 对齐）
+  const historyPage = ref(1)
+  const historyPageSize = ref(10)
+  const historyTotal = ref(0)
+  const historyTotalPages = ref(0)
+
   // 搜索/筛选独立状态：不污染全局 tasks，避免影响顶栏徽章与进行中分区
   const searchKeyword = ref('')
   const statusFilter = ref<ReviewStatus | ''>('')
@@ -262,20 +268,22 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     }
   }
 
-  async function loadHistory(): Promise<void> {
+  async function loadHistory(page = historyPage.value, size = historyPageSize.value): Promise<void> {
     historyLoading.value = true
     try {
-      // 后端按用户分页返回，这里拉前 50 条作为历史展示
-      const result = await getReviewHistory(1, 50)
-      const list = result.records
-      const known = new Set(tasks.value.map((t) => t.id).filter(Boolean) as string[])
-      const merged: ReviewTask[] = []
-      for (const r of list) {
-        if (known.has(r.id)) continue
-        merged.push(reviewToTask(r))
-      }
-      // 远端记录追加在本地任务之后；本地新提交的保持在最前
-      tasks.value = [...tasks.value, ...merged].slice(0, MAX_TASKS)
+      const result = await getReviewHistory(page, size)
+      historyPage.value = result.page
+      historyPageSize.value = result.size
+      historyTotal.value = result.total
+      historyTotalPages.value = result.totalPages
+
+      // 替换 tasks 中"远端已完成"区域为当前页的记录；
+      // 本地未提交成功（id 为 null）与进行中的任务一概保留，
+      // 避免翻页时丢失本地最新提交或干扰轮询。
+      const kept = tasks.value.filter((t) => !t.id || isInProgressStatus(t.status))
+      const newRecords = result.records.map(reviewToTask)
+      tasks.value = [...kept, ...newRecords]
+
       // 如果远端返回里有进行中的（理论上少见），交给轮询接管
       for (const t of tasks.value) {
         if (t.id && isInProgressStatus(t.status) && !pollTimers.has(t.localId)) {
@@ -287,6 +295,19 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     } finally {
       historyLoading.value = false
     }
+  }
+
+  function changeHistoryPage(page: number) {
+    if (page < 1) return
+    if (historyTotalPages.value > 0 && page > historyTotalPages.value) return
+    if (page === historyPage.value) return
+    void loadHistory(page, historyPageSize.value)
+  }
+
+  function changeHistoryPageSize(size: number) {
+    if (size === historyPageSize.value) return
+    historyPageSize.value = size
+    void loadHistory(1, size)
   }
 
   function reviewToTask(r: ReviewResponse): ReviewTask {
@@ -343,6 +364,10 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     inProgressCount,
     historyLoading,
     historyLoaded,
+    historyPage,
+    historyPageSize,
+    historyTotal,
+    historyTotalPages,
     searchKeyword,
     statusFilter,
     searchResults,
@@ -358,6 +383,8 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     clearFinished,
     resumeAll,
     loadHistory,
+    changeHistoryPage,
+    changeHistoryPageSize,
     searchHistory,
     resetSearch,
   }
