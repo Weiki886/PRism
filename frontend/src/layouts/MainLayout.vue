@@ -523,6 +523,23 @@ function relativeTime(ts: number) {
             </li>
           </ul>
         </a-spin>
+
+        <div
+          v-if="!taskStore.isSearching && taskStore.historyTotal > 0"
+          class="history-pagination"
+        >
+          <a-pagination
+            size="small"
+            :current="taskStore.historyPage"
+            :page-size="taskStore.historyPageSize"
+            :total="taskStore.historyTotal"
+            :page-size-options="['10', '20', '50']"
+            show-size-changer
+            :show-total="(total: number) => `共 ${total} 条`"
+            @change="(p: number) => taskStore.changeHistoryPage(p)"
+            @show-size-change="(_: number, s: number) => taskStore.changeHistoryPageSize(s)"
+          />
+        </div>
       </div>
     </a-drawer>
 
@@ -709,6 +726,13 @@ function relativeTime(ts: number) {
 }
 .history-error-alert {
   margin-bottom: 12px;
+}
+.history-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  border-top: 1px solid #f5f5f5;
 }
 .drawer-section-title {
   font-weight: 600;
