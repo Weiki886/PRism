@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
+import { DuplicateError, retryReview } from '@/api/review'
 import StatsOverviewModal from '@/components/StatsOverviewModal.vue'
 
 const userStore = useUserStore()
@@ -97,6 +98,32 @@ function openDrawer() {
   }
 }
 
+provide('openDrawer', openDrawer)
+
+const DUPLICATE_STATUS_LABEL: Record<string, string> = {
+  completed: '已完成', processing: '分析中', pending: '排队中', error: '上次失败',
+}
+
+function showDuplicateModal(err: DuplicateError) {
+  const label = DUPLICATE_STATUS_LABEL[err.info.status] ?? err.info.status
+  const canRetry = err.info.status === 'error'
+  Modal.confirm({
+    title: '该 PR 已有分析记录',
+    content: `「${err.info.prTitle}」已提交过分析（${label}）。`,
+    okText: '查看记录',
+    cancelText: canRetry ? '重新分析' : '关闭',
+    onOk: () => {
+      closeDrawer()
+      router.push({ name: 'review-detail', params: { id: err.info.existingReviewId } })
+    },
+    onCancel: canRetry ? async () => {
+      await retryReview(err.info.existingReviewId)
+      await taskStore.refreshOne(err.info.existingReviewId)
+      message.success('已重新加入分析队列')
+    } : undefined,
+  })
+}
+
 function refreshHistory() {
   void taskStore.loadHistory()
 }
@@ -117,9 +144,15 @@ async function submitFromDrawer() {
     drawerErrorMsg.value = '链接格式不正确'
     return
   }
-  void taskStore.submit(url)
   newPrUrl.value = ''
-  message.success('已加入分析队列')
+  try {
+    await taskStore.submit(url)
+    message.success('已加入分析队列')
+  } catch (err) {
+    if (err instanceof DuplicateError) {
+      showDuplicateModal(err)
+    }
+  }
 }
 
 function openDetail(task: ReviewTask) {

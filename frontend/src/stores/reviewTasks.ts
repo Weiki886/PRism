@@ -6,6 +6,7 @@ import {
   getReview,
   getReviewHistory,
   retryReview,
+  DuplicateError,
   type ReviewResponse,
   type ReviewStatus,
 } from '@/api/review'
@@ -134,6 +135,17 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
       persist()
       startPolling(task.localId)
     } catch (err: unknown) {
+      // 业务码 409 + data 含 existingReviewId → 重复提交，移除占位任务，抛出 DuplicateError 由 UI 引导
+      const bizErr = err as { code?: number; data?: { existingReviewId?: string; status?: string; prTitle?: string } }
+      if (bizErr?.code === 409 && bizErr.data?.existingReviewId) {
+        tasks.value = tasks.value.filter((t) => t.localId !== task.localId)
+        persist()
+        throw new DuplicateError({
+          existingReviewId: bizErr.data.existingReviewId,
+          status: (bizErr.data.status ?? 'pending') as ReviewStatus,
+          prTitle: bizErr.data.prTitle ?? '',
+        })
+      }
       const e = err as { response?: { data?: { message?: string } }; message?: string }
       task.status = 'error'
       task.submitError =

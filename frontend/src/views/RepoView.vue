@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { inject, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
+import { Modal, message } from 'ant-design-vue'
 import {
   GithubOutlined,
   StarOutlined,
@@ -13,10 +13,36 @@ import {
   ClockCircleOutlined,
 } from '@ant-design/icons-vue'
 import { getRepoInfo, getRepoPulls, type RepoInfo, type RepoPullRequest } from '@/api/repo'
+import { DuplicateError, retryReview } from '@/api/review'
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 
+const openDrawer = inject<() => void>('openDrawer')
 const router = useRouter()
 const taskStore = useReviewTaskStore()
+
+const DUPLICATE_STATUS_LABEL: Record<string, string> = {
+  completed: '已完成', processing: '分析中', pending: '排队中', error: '上次失败',
+}
+
+function showDuplicateModal(err: DuplicateError) {
+  const label = DUPLICATE_STATUS_LABEL[err.info.status] ?? err.info.status
+  const canRetry = err.info.status === 'error'
+  Modal.confirm({
+    title: '该 PR 已有分析记录',
+    content: `「${err.info.prTitle}」已提交过分析（${label}）。`,
+    okText: '查看记录',
+    cancelText: canRetry ? '重新分析' : '关闭',
+    onOk: () => {
+      router.push({ name: 'review-detail', params: { id: err.info.existingReviewId } })
+    },
+    onCancel: canRetry ? async () => {
+      await retryReview(err.info.existingReviewId)
+      await taskStore.refreshOne(err.info.existingReviewId)
+      message.success('已重新加入分析队列')
+      openDrawer?.()
+    } : undefined,
+  })
+}
 
 const repoUrl = ref('')
 const repoInfo = ref<RepoInfo | null>(null)
@@ -102,9 +128,11 @@ async function analyzePr(pr: RepoPullRequest) {
   try {
     await taskStore.submit(pr.htmlUrl)
     message.success(`已将「${pr.title}」加入分析队列`)
-    router.push({ name: 'home' })
-  } catch {
-    // 拦截器已提示
+    openDrawer?.()
+  } catch (err) {
+    if (err instanceof DuplicateError) {
+      showDuplicateModal(err)
+    }
   } finally {
     analyzingIds.value.delete(pr.number)
   }
