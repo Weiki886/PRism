@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
@@ -16,6 +16,8 @@ import {
   LoadingOutlined,
   ClockCircleOutlined,
   BarChartOutlined,
+  SearchOutlined,
+  CloseOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
@@ -32,6 +34,40 @@ const drawerOpen = ref(false)
 const newPrUrl = ref('')
 const drawerErrorMsg = ref('')
 const statsOpen = ref(false)
+
+const STATUS_OPTIONS = [
+  { value: '', label: '全部状态' },
+  { value: 'completed', label: '已完成' },
+  { value: 'processing', label: '分析中' },
+  { value: 'pending', label: '排队中' },
+  { value: 'error', label: '失败' },
+] as const
+
+const displayedHistory = computed(() =>
+  taskStore.isSearching ? taskStore.searchResults : taskStore.finished,
+)
+const historyEmptyText = computed(() => (taskStore.isSearching ? '未找到匹配的记录' : '暂无历史记录'))
+
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => taskStore.searchKeyword,
+  () => {
+    if (searchDebounce) clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => {
+      void taskStore.searchHistory()
+    }, 300)
+  },
+)
+watch(
+  () => taskStore.statusFilter,
+  () => {
+    void taskStore.searchHistory()
+  },
+)
+
+function clearSearch() {
+  taskStore.resetSearch()
+}
 
 const PR_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/i
 
@@ -391,63 +427,102 @@ function relativeTime(ts: number) {
       <div class="drawer-section">
         <div class="drawer-section-head">
           <span class="drawer-section-title">历史记录</span>
-          <a-tag>{{ taskStore.finished.length }}</a-tag>
-        </div>
-        <a-empty
-          v-if="!taskStore.finished.length"
-          :image="undefined"
-          description="暂无历史记录"
-          class="drawer-empty"
-        />
-        <ul v-else class="task-list">
-          <li
-            v-for="t in taskStore.finished"
-            :key="t.localId"
-            class="task-item"
-            :class="{ clickable: !!t.id }"
-            @click="t.id ? openDetail(t) : null"
+          <a-tag>{{ taskStore.isSearching ? taskStore.searchResults.length : taskStore.finished.length }}</a-tag>
+          <a-button
+            v-if="taskStore.isSearching"
+            type="link"
+            size="small"
+            class="clear-search-btn"
+            @click="clearSearch"
           >
-            <div class="task-row">
-              <component
-                :is="statusOf(t).icon"
-                class="task-status-icon"
-                :class="`status-${t.status}`"
-              />
-              <div class="task-main">
-                <div class="task-title">
-                  {{ t.prTitle || shortUrl(t.prUrl) || '未命名任务' }}
+            <template #icon><CloseOutlined /></template>
+            清除筛选
+          </a-button>
+        </div>
+
+        <div class="history-filters">
+          <a-input
+            v-model:value="taskStore.searchKeyword"
+            placeholder="搜索 PR 标题 / 作者"
+            allow-clear
+            class="history-search-input"
+          >
+            <template #prefix>
+              <SearchOutlined style="color: rgba(0,0,0,0.35)" />
+            </template>
+          </a-input>
+          <a-select
+            v-model:value="taskStore.statusFilter"
+            :options="STATUS_OPTIONS"
+            class="history-status-select"
+          />
+        </div>
+
+        <a-alert
+          v-if="taskStore.searchError"
+          type="error"
+          show-icon
+          :message="taskStore.searchError"
+          class="history-error-alert"
+        />
+
+        <a-spin :spinning="taskStore.searchLoading">
+          <a-empty
+            v-if="!displayedHistory.length"
+            :image="undefined"
+            :description="historyEmptyText"
+            class="drawer-empty"
+          />
+          <ul v-else class="task-list">
+            <li
+              v-for="t in displayedHistory"
+              :key="t.localId"
+              class="task-item"
+              :class="{ clickable: !!t.id }"
+              @click="t.id ? openDetail(t) : null"
+            >
+              <div class="task-row">
+                <component
+                  :is="statusOf(t).icon"
+                  class="task-status-icon"
+                  :class="`status-${t.status}`"
+                />
+                <div class="task-main">
+                  <div class="task-title">
+                    {{ t.prTitle || shortUrl(t.prUrl) || '未命名任务' }}
+                  </div>
+                  <div class="task-meta">
+                    <a-tag :color="statusOf(t).color" class="task-status-tag">
+                      {{ statusOf(t).text }}
+                    </a-tag>
+                    <span v-if="t.status === 'completed'" class="task-counts">
+                      风险 {{ t.riskCount }} · 建议 {{ t.suggestionCount }}
+                    </span>
+                    <span class="task-time">
+                      {{ t.finishedAt ? relativeTime(t.finishedAt) : relativeTime(t.createdAt) }}
+                    </span>
+                  </div>
                 </div>
-                <div class="task-meta">
-                  <a-tag :color="statusOf(t).color" class="task-status-tag">
-                    {{ statusOf(t).text }}
-                  </a-tag>
-                  <span v-if="t.status === 'completed'" class="task-counts">
-                    风险 {{ t.riskCount }} · 建议 {{ t.suggestionCount }}
-                  </span>
-                  <span class="task-time">
-                    {{ t.finishedAt ? relativeTime(t.finishedAt) : relativeTime(t.createdAt) }}
-                  </span>
-                </div>
-              </div>
-              <a-tooltip v-if="t.id && t.status === 'error'" title="重新分析">
+                <a-tooltip v-if="t.id && t.status === 'error'" title="重新分析">
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="(e) => retryTask(t, e)"
+                  >
+                    <template #icon><ReloadOutlined /></template>
+                  </a-button>
+                </a-tooltip>
                 <a-button
                   type="text"
                   size="small"
-                  @click="(e) => retryTask(t, e)"
+                  @click="(e) => removeTask(t, e)"
                 >
-                  <template #icon><ReloadOutlined /></template>
+                  <template #icon><DeleteOutlined /></template>
                 </a-button>
-              </a-tooltip>
-              <a-button
-                type="text"
-                size="small"
-                @click="(e) => removeTask(t, e)"
-              >
-                <template #icon><DeleteOutlined /></template>
-              </a-button>
-            </div>
-          </li>
-        </ul>
+              </div>
+            </li>
+          </ul>
+        </a-spin>
       </div>
     </a-drawer>
 
@@ -613,6 +688,27 @@ function relativeTime(ts: number) {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+.clear-search-btn {
+  margin-left: auto;
+  padding: 0 4px;
+  height: 22px;
+  font-size: 12px;
+}
+.history-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.history-search-input {
+  flex: 1;
+}
+.history-status-select {
+  width: 120px;
+  flex-shrink: 0;
+}
+.history-error-alert {
+  margin-bottom: 12px;
 }
 .drawer-section-title {
   font-weight: 600;
