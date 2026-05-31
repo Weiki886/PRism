@@ -15,6 +15,8 @@ export interface LoginResponse {
   token: string
   username: string
   role: string
+  avatarUrl?: string | null
+  githubLogin?: string | null
 }
 
 export async function login(payload: LoginRequest): Promise<LoginResponse> {

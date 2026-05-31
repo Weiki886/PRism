@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
   ThunderboltOutlined,
-  UserOutlined,
   LogoutOutlined,
   CrownOutlined,
   DownOutlined,
@@ -27,6 +26,7 @@ const taskStore = useReviewTaskStore()
 const router = useRouter()
 
 const initials = computed(() => userStore.username?.slice(0, 1).toUpperCase() || 'U')
+const hasAvatar = computed(() => !!userStore.avatarUrl)
 
 const drawerOpen = ref(false)
 const newPrUrl = ref('')
@@ -215,8 +215,18 @@ function relativeTime(ts: number) {
 
           <a-dropdown placement="bottomRight">
             <div class="user">
-              <a-avatar style="background-color: #1677ff">{{ initials }}</a-avatar>
+              <a-avatar
+                v-if="hasAvatar"
+                :src="userStore.avatarUrl"
+                class="user-avatar"
+              />
+              <a-avatar v-else class="user-avatar" style="background-color: #1677ff">
+                {{ initials }}
+              </a-avatar>
               <span class="username">{{ userStore.username }}</span>
+              <a-tag v-if="userStore.isGithubLinked" color="default" class="github-tag">
+                <GithubOutlined /> {{ userStore.githubLogin }}
+              </a-tag>
               <a-tag v-if="userStore.isAdmin" color="gold" class="role-tag">
                 <CrownOutlined /> ADMIN
               </a-tag>
@@ -224,9 +234,25 @@ function relativeTime(ts: number) {
             </div>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="user" disabled>
-                  <UserOutlined />
-                  {{ userStore.username }}
+                <a-menu-item key="user" disabled class="user-menu-item">
+                  <div class="user-menu-row">
+                    <a-avatar
+                      v-if="hasAvatar"
+                      :src="userStore.avatarUrl"
+                      :size="36"
+                    />
+                    <a-avatar v-else :size="36" style="background-color: #1677ff">
+                      {{ initials }}
+                    </a-avatar>
+                    <div class="user-menu-info">
+                      <div class="user-menu-name">{{ userStore.username }}</div>
+                      <div v-if="userStore.isGithubLinked" class="user-menu-sub">
+                        <GithubOutlined />
+                        {{ userStore.githubLogin }}
+                      </div>
+                      <div v-else class="user-menu-sub">本地账号</div>
+                    </div>
+                  </div>
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="stats" @click="statsOpen = true">
@@ -513,12 +539,52 @@ function relativeTime(ts: number) {
 .user:hover {
   background: rgba(0, 0, 0, 0.025);
 }
+.user-avatar {
+  flex-shrink: 0;
+}
 .username {
   font-size: 14px;
   color: rgba(0, 0, 0, 0.85);
 }
 .role-tag {
   margin: 0;
+}
+.github-tag {
+  margin: 0;
+  font-size: 12px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: rgba(0, 0, 0, 0.65);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.user-menu-item {
+  cursor: default !important;
+  padding: 10px 16px !important;
+  background: transparent !important;
+}
+.user-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+}
+.user-menu-info {
+  min-width: 0;
+}
+.user-menu-name {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 14px;
+}
+.user-menu-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  margin-top: 2px;
 }
 .content {
   min-height: calc(100vh - 56px - 48px);
