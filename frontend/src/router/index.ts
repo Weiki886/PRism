@@ -37,6 +37,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/ReviewDetailView.vue'),
         meta: { title: '分析详情' },
       },
+      {
+        path: 'admin/users',
+        name: 'admin-users',
+        component: () => import('@/views/AdminUsersView.vue'),
+        meta: { title: '用户管理', requiresAdmin: true },
+      },
     ],
   },
   {
@@ -56,6 +62,9 @@ router.beforeEach((to) => {
     return { name: 'login', query: { redirect: to.fullPath } }
   }
   if (to.meta.public && userStore.isLoggedIn && (to.name === 'login' || to.name === 'register')) {
+    return { name: 'home' }
+  }
+  if (to.meta.requiresAdmin && !userStore.isAdmin) {
     return { name: 'home' }
   }
   return true
