@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, provide, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
   ThunderboltOutlined,
-  UserOutlined,
   LogoutOutlined,
   CrownOutlined,
   DownOutlined,
@@ -17,9 +16,14 @@ import {
   LoadingOutlined,
   ClockCircleOutlined,
   BarChartOutlined,
+  SearchOutlined,
+  CloseOutlined,
+  FolderOpenOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
+import { DuplicateError, retryReview } from '@/api/review'
 import StatsOverviewModal from '@/components/StatsOverviewModal.vue'
 
 const userStore = useUserStore()
@@ -27,11 +31,46 @@ const taskStore = useReviewTaskStore()
 const router = useRouter()
 
 const initials = computed(() => userStore.username?.slice(0, 1).toUpperCase() || 'U')
+const hasAvatar = computed(() => !!userStore.avatarUrl)
 
 const drawerOpen = ref(false)
 const newPrUrl = ref('')
 const drawerErrorMsg = ref('')
 const statsOpen = ref(false)
+
+const STATUS_OPTIONS = [
+  { value: '', label: '全部状态' },
+  { value: 'completed', label: '已完成' },
+  { value: 'processing', label: '分析中' },
+  { value: 'pending', label: '排队中' },
+  { value: 'error', label: '失败' },
+] as const
+
+const displayedHistory = computed(() =>
+  taskStore.isSearching ? taskStore.searchResults : taskStore.finished,
+)
+const historyEmptyText = computed(() => (taskStore.isSearching ? '未找到匹配的记录' : '暂无历史记录'))
+
+let searchDebounce: ReturnType<typeof setTimeout> | null = null
+watch(
+  () => taskStore.searchKeyword,
+  () => {
+    if (searchDebounce) clearTimeout(searchDebounce)
+    searchDebounce = setTimeout(() => {
+      void taskStore.searchHistory()
+    }, 300)
+  },
+)
+watch(
+  () => taskStore.statusFilter,
+  () => {
+    void taskStore.searchHistory()
+  },
+)
+
+function clearSearch() {
+  taskStore.resetSearch()
+}
 
 const PR_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/i
 
@@ -60,6 +99,32 @@ function openDrawer() {
   }
 }
 
+provide('openDrawer', openDrawer)
+
+const DUPLICATE_STATUS_LABEL: Record<string, string> = {
+  completed: '已完成', processing: '分析中', pending: '排队中', error: '上次失败',
+}
+
+function showDuplicateModal(err: DuplicateError) {
+  const label = DUPLICATE_STATUS_LABEL[err.info.status] ?? err.info.status
+  const canRetry = err.info.status === 'error'
+  Modal.confirm({
+    title: '该 PR 已有分析记录',
+    content: `「${err.info.prTitle}」已提交过分析（${label}）。`,
+    okText: '查看记录',
+    cancelText: canRetry ? '重新分析' : '关闭',
+    onOk: () => {
+      closeDrawer()
+      router.push({ name: 'review-detail', params: { id: err.info.existingReviewId } })
+    },
+    onCancel: canRetry ? async () => {
+      await retryReview(err.info.existingReviewId)
+      await taskStore.refreshOne(err.info.existingReviewId)
+      message.success('已重新加入分析队列')
+    } : undefined,
+  })
+}
+
 function refreshHistory() {
   void taskStore.loadHistory()
 }
@@ -80,9 +145,15 @@ async function submitFromDrawer() {
     drawerErrorMsg.value = '链接格式不正确'
     return
   }
-  void taskStore.submit(url)
   newPrUrl.value = ''
-  message.success('已加入分析队列')
+  try {
+    await taskStore.submit(url)
+    message.success('已加入分析队列')
+  } catch (err) {
+    if (err instanceof DuplicateError) {
+      showDuplicateModal(err)
+    }
+  }
 }
 
 function openDetail(task: ReviewTask) {
@@ -202,6 +273,11 @@ function relativeTime(ts: number) {
         </router-link>
 
         <div class="actions">
+          <a-button type="text" class="nav-btn" @click="$router.push({ name: 'repo-browser' })">
+            <FolderOpenOutlined class="nav-icon" />
+            <span class="nav-btn-text">仓库</span>
+          </a-button>
+
           <a-button type="text" class="task-btn" @click="openDrawer">
             <a-badge
               :count="taskStore.inProgressCount"
@@ -215,8 +291,18 @@ function relativeTime(ts: number) {
 
           <a-dropdown placement="bottomRight">
             <div class="user">
-              <a-avatar style="background-color: #1677ff">{{ initials }}</a-avatar>
+              <a-avatar
+                v-if="hasAvatar"
+                :src="userStore.avatarUrl"
+                class="user-avatar"
+              />
+              <a-avatar v-else class="user-avatar" style="background-color: #1677ff">
+                {{ initials }}
+              </a-avatar>
               <span class="username">{{ userStore.username }}</span>
+              <a-tag v-if="userStore.isGithubLinked" color="default" class="github-tag">
+                <GithubOutlined /> {{ userStore.githubLogin }}
+              </a-tag>
               <a-tag v-if="userStore.isAdmin" color="gold" class="role-tag">
                 <CrownOutlined /> ADMIN
               </a-tag>
@@ -224,14 +310,34 @@ function relativeTime(ts: number) {
             </div>
             <template #overlay>
               <a-menu>
-                <a-menu-item key="user" disabled>
-                  <UserOutlined />
-                  {{ userStore.username }}
+                <a-menu-item key="user" disabled class="user-menu-item">
+                  <div class="user-menu-row">
+                    <a-avatar
+                      v-if="hasAvatar"
+                      :src="userStore.avatarUrl"
+                      :size="36"
+                    />
+                    <a-avatar v-else :size="36" style="background-color: #1677ff">
+                      {{ initials }}
+                    </a-avatar>
+                    <div class="user-menu-info">
+                      <div class="user-menu-name">{{ userStore.username }}</div>
+                      <div v-if="userStore.isGithubLinked" class="user-menu-sub">
+                        <GithubOutlined />
+                        {{ userStore.githubLogin }}
+                      </div>
+                      <div v-else class="user-menu-sub">本地账号</div>
+                    </div>
+                  </div>
                 </a-menu-item>
                 <a-menu-divider />
                 <a-menu-item key="stats" @click="statsOpen = true">
                   <BarChartOutlined />
                   我的统计
+                </a-menu-item>
+                <a-menu-item key="account" @click="router.push({ name: 'account-settings' })">
+                  <SettingOutlined />
+                  账户设置
                 </a-menu-item>
                 <a-menu-item v-if="userStore.isAdmin" key="admin-users" @click="router.push({ name: 'admin-users' })">
                   <CrownOutlined />
@@ -369,63 +475,119 @@ function relativeTime(ts: number) {
       <div class="drawer-section">
         <div class="drawer-section-head">
           <span class="drawer-section-title">历史记录</span>
-          <a-tag>{{ taskStore.finished.length }}</a-tag>
-        </div>
-        <a-empty
-          v-if="!taskStore.finished.length"
-          :image="undefined"
-          description="暂无历史记录"
-          class="drawer-empty"
-        />
-        <ul v-else class="task-list">
-          <li
-            v-for="t in taskStore.finished"
-            :key="t.localId"
-            class="task-item"
-            :class="{ clickable: !!t.id }"
-            @click="t.id ? openDetail(t) : null"
+          <a-tag>{{ taskStore.isSearching ? taskStore.searchResults.length : taskStore.finished.length }}</a-tag>
+          <a-button
+            v-if="taskStore.isSearching"
+            type="link"
+            size="small"
+            class="clear-search-btn"
+            @click="clearSearch"
           >
-            <div class="task-row">
-              <component
-                :is="statusOf(t).icon"
-                class="task-status-icon"
-                :class="`status-${t.status}`"
-              />
-              <div class="task-main">
-                <div class="task-title">
-                  {{ t.prTitle || shortUrl(t.prUrl) || '未命名任务' }}
+            <template #icon><CloseOutlined /></template>
+            清除筛选
+          </a-button>
+        </div>
+
+        <div class="history-filters">
+          <a-input
+            v-model:value="taskStore.searchKeyword"
+            placeholder="搜索 PR 标题 / 作者"
+            allow-clear
+            class="history-search-input"
+          >
+            <template #prefix>
+              <SearchOutlined style="color: rgba(0,0,0,0.35)" />
+            </template>
+          </a-input>
+          <a-select
+            v-model:value="taskStore.statusFilter"
+            :options="STATUS_OPTIONS"
+            class="history-status-select"
+          />
+        </div>
+
+        <a-alert
+          v-if="taskStore.searchError"
+          type="error"
+          show-icon
+          :message="taskStore.searchError"
+          class="history-error-alert"
+        />
+
+        <a-spin :spinning="taskStore.searchLoading">
+          <a-empty
+            v-if="!displayedHistory.length"
+            :image="undefined"
+            :description="historyEmptyText"
+            class="drawer-empty"
+          />
+          <ul v-else class="task-list">
+            <li
+              v-for="t in displayedHistory"
+              :key="t.localId"
+              class="task-item"
+              :class="{ clickable: !!t.id }"
+              @click="t.id ? openDetail(t) : null"
+            >
+              <div class="task-row">
+                <component
+                  :is="statusOf(t).icon"
+                  class="task-status-icon"
+                  :class="`status-${t.status}`"
+                />
+                <div class="task-main">
+                  <div class="task-title">
+                    {{ t.prTitle || shortUrl(t.prUrl) || '未命名任务' }}
+                  </div>
+                  <div class="task-meta">
+                    <a-tag :color="statusOf(t).color" class="task-status-tag">
+                      {{ statusOf(t).text }}
+                    </a-tag>
+                    <span v-if="t.status === 'completed'" class="task-counts">
+                      风险 {{ t.riskCount }} · 建议 {{ t.suggestionCount }}
+                    </span>
+                    <span class="task-time">
+                      {{ t.finishedAt ? relativeTime(t.finishedAt) : relativeTime(t.createdAt) }}
+                    </span>
+                  </div>
                 </div>
-                <div class="task-meta">
-                  <a-tag :color="statusOf(t).color" class="task-status-tag">
-                    {{ statusOf(t).text }}
-                  </a-tag>
-                  <span v-if="t.status === 'completed'" class="task-counts">
-                    风险 {{ t.riskCount }} · 建议 {{ t.suggestionCount }}
-                  </span>
-                  <span class="task-time">
-                    {{ t.finishedAt ? relativeTime(t.finishedAt) : relativeTime(t.createdAt) }}
-                  </span>
-                </div>
-              </div>
-              <a-tooltip v-if="t.id && t.status === 'error'" title="重新分析">
+                <a-tooltip v-if="t.id && t.status === 'error'" title="重新分析">
+                  <a-button
+                    type="text"
+                    size="small"
+                    @click="(e) => retryTask(t, e)"
+                  >
+                    <template #icon><ReloadOutlined /></template>
+                  </a-button>
+                </a-tooltip>
                 <a-button
                   type="text"
                   size="small"
-                  @click="(e) => retryTask(t, e)"
+                  @click="(e) => removeTask(t, e)"
                 >
-                  <template #icon><ReloadOutlined /></template>
+                  <template #icon><DeleteOutlined /></template>
                 </a-button>
-              </a-tooltip>
-              <a-button
-                type="text"
-                size="small"
-                @click="(e) => removeTask(t, e)"
-              >
-                <template #icon><DeleteOutlined /></template>
-              </a-button>
-            </div>
-          </li>
-        </ul>
+              </div>
+            </li>
+          </ul>
+        </a-spin>
+
+        <div
+          v-if="!taskStore.isSearching && taskStore.historyTotal > 0"
+          class="history-pagination"
+        >
+          <a-pagination
+            size="small"
+            :current="taskStore.historyPage"
+            :page-size="taskStore.historyPageSize"
+            :total="taskStore.historyTotal"
+            :page-size-options="['10', '20', '50']"
+            show-size-changer
+            :show-total="(total: number) => `共 ${total} 条`"
+            @change="(p: number) => taskStore.changeHistoryPage(p)"
+            @show-size-change="(_: number, s: number) => taskStore.changeHistoryPageSize(s)"
+          />
+        </div>
       </div>
     </a-drawer>
 
@@ -496,6 +658,21 @@ function relativeTime(ts: number) {
   height: 36px;
   padding: 0 12px;
 }
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+}
+.nav-icon {
+  font-size: 18px;
+  color: rgba(0, 0, 0, 0.7);
+}
+.nav-btn-text {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+}
 .task-icon {
   font-size: 18px;
   color: rgba(0, 0, 0, 0.7);
@@ -517,12 +694,52 @@ function relativeTime(ts: number) {
 .user:hover {
   background: rgba(0, 0, 0, 0.025);
 }
+.user-avatar {
+  flex-shrink: 0;
+}
 .username {
   font-size: 14px;
   color: rgba(0, 0, 0, 0.85);
 }
 .role-tag {
   margin: 0;
+}
+.github-tag {
+  margin: 0;
+  font-size: 12px;
+  border: 1px solid #d9d9d9;
+  background: #fafafa;
+  color: rgba(0, 0, 0, 0.65);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.user-menu-item {
+  cursor: default !important;
+  padding: 10px 16px !important;
+  background: transparent !important;
+}
+.user-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  line-height: 1.4;
+}
+.user-menu-info {
+  min-width: 0;
+}
+.user-menu-name {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+  font-size: 14px;
+}
+.user-menu-sub {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  margin-top: 2px;
 }
 .content {
   min-height: calc(100vh - 56px - 48px);
@@ -551,6 +768,34 @@ function relativeTime(ts: number) {
   align-items: center;
   gap: 8px;
   margin-bottom: 8px;
+}
+.clear-search-btn {
+  margin-left: auto;
+  padding: 0 4px;
+  height: 22px;
+  font-size: 12px;
+}
+.history-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.history-search-input {
+  flex: 1;
+}
+.history-status-select {
+  width: 120px;
+  flex-shrink: 0;
+}
+.history-error-alert {
+  margin-bottom: 12px;
+}
+.history-pagination {
+  margin-top: 12px;
+  display: flex;
+  justify-content: center;
+  padding-top: 8px;
+  border-top: 1px solid #f5f5f5;
 }
 .drawer-section-title {
   font-weight: 600;

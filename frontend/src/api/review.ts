@@ -18,6 +18,28 @@ export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
 
 export type MergeAdvice = 'RECOMMEND' | 'CAUTION' | 'NOT_RECOMMEND'
 
+export interface ContextInfo {
+  changedFiles: number
+  diffTokens: number
+  includedCommitMessages: boolean
+  includedReviewComments: boolean
+  includedFileContexts: boolean
+  model: string
+}
+
+export interface DuplicateInfo {
+  existingReviewId: string
+  status: ReviewStatus
+  prTitle: string
+}
+
+export class DuplicateError extends Error {
+  constructor(public readonly info: DuplicateInfo) {
+    super('REVIEW_DUPLICATE')
+    this.name = 'DuplicateError'
+  }
+}
+
 export interface ReviewResponse {
   id: string
   prTitle: string
@@ -28,10 +50,19 @@ export interface ReviewResponse {
   status: ReviewStatus
   healthScore?: number | null
   mergeAdvice?: MergeAdvice | null
+  contextInfo?: ContextInfo | null
+}
+
+export interface PageResult<T> {
+  records: T[]
+  total: number
+  page: number
+  size: number
+  totalPages: number
 }
 
 export async function createReview(prUrl: string): Promise<ReviewResponse> {
-  const res = await request.post<ReviewResponse>('/api/review', { prUrl })
+  const res = await request.post<ReviewResponse>('/api/review', { prUrl }, { silent: true })
   return res.data
 }
 
@@ -40,9 +71,17 @@ export async function getReview(id: string): Promise<ReviewResponse> {
   return res.data
 }
 
-export async function getReviewHistory(page = 1, size = 10): Promise<ReviewResponse[]> {
-  const res = await request.get<ReviewResponse[]>('/api/review/history', {
-    params: { page, size },
+export async function getReviewHistory(
+  page = 1,
+  size = 10,
+  keyword?: string,
+  status?: ReviewStatus | '',
+): Promise<PageResult<ReviewResponse>> {
+  const params: Record<string, string | number> = { page, size }
+  if (keyword) params.keyword = keyword
+  if (status) params.status = status
+  const res = await request.get<PageResult<ReviewResponse>>('/api/review/history', {
+    params,
   })
   return res.data
 }
@@ -54,4 +93,24 @@ export async function deleteReview(id: string): Promise<void> {
 export async function retryReview(id: string): Promise<ReviewResponse> {
   const res = await request.post<ReviewResponse>(`/api/review/${id}/retry`)
   return res.data
+}
+
+export async function exportReview(id: string, format: 'md' | 'pdf'): Promise<void> {
+  const res = await request.get(`/api/review/${id}/export`, {
+    params: { format },
+    responseType: 'blob',
+    silent: true,
+  })
+  const blob = res.data as Blob
+  const disposition = (res.headers as Record<string, string>)['content-disposition'] ?? ''
+  const match = disposition.match(/filename="?([^";]+)"?/)
+  const filename = match?.[1] ?? `review-${id}.${format}`
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }

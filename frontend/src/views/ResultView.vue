@@ -8,9 +8,11 @@ import {
   LoadingOutlined,
   DeleteOutlined,
   ReloadOutlined,
+  DownloadOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
-import { deleteReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
+import { deleteReview, exportReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
 import {
   getFeedbackStats,
   submitFeedback,
@@ -259,6 +261,21 @@ const headerTagText = computed(() => {
   return '提交中'
 })
 const headerSubTitle = computed(() => `#${props.reviewId}`)
+
+const exportLoading = ref<'md' | 'pdf' | null>(null)
+
+async function handleExport(format: 'md' | 'pdf') {
+  if (!props.reviewId || exportLoading.value) return
+  exportLoading.value = format
+  try {
+    await exportReview(props.reviewId, format)
+    message.success(`已导出 ${format.toUpperCase()} 报告`)
+  } catch {
+    message.error('导出失败，请稍后重试')
+  } finally {
+    exportLoading.value = null
+  }
+}
 </script>
 
 <template>
@@ -293,6 +310,24 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
               <template #icon><ReloadOutlined /></template>
               重新分析
             </a-button>
+            <template v-if="isCompleted">
+              <a-button
+                :loading="exportLoading === 'md'"
+                :disabled="exportLoading !== null && exportLoading !== 'md'"
+                @click="handleExport('md')"
+              >
+                <template #icon><DownloadOutlined /></template>
+                导出 Markdown
+              </a-button>
+              <a-button
+                :loading="exportLoading === 'pdf'"
+                :disabled="exportLoading !== null && exportLoading !== 'pdf'"
+                @click="handleExport('pdf')"
+              >
+                <template #icon><DownloadOutlined /></template>
+                导出 PDF
+              </a-button>
+            </template>
             <a-button
               v-if="isCompleted || isError"
               danger
@@ -372,6 +407,40 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
           :score="review.healthScore"
           :advice="review.mergeAdvice"
         />
+      </a-card>
+
+      <a-card
+        v-if="!submitError && isCompleted && review?.contextInfo"
+        :bordered="false"
+        class="section"
+      >
+        <template #title>
+          <ExperimentOutlined />
+          <span class="section-title-text">分析上下文</span>
+        </template>
+        <a-descriptions size="small" :column="{ xs: 1, sm: 2, md: 3 }">
+          <a-descriptions-item label="使用模型">
+            <a-tag color="blue" class="ctx-model-tag">{{ review.contextInfo.model }}</a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="变更文件">
+            {{ review.contextInfo.changedFiles }} 个
+          </a-descriptions-item>
+          <a-descriptions-item label="Diff Token">
+            ~{{ review.contextInfo.diffTokens.toLocaleString() }}
+          </a-descriptions-item>
+        </a-descriptions>
+        <div class="ctx-tags">
+          <span class="ctx-tags-label">已纳入上下文：</span>
+          <a-tag :color="review.contextInfo.includedCommitMessages ? 'green' : 'default'">
+            Commit 信息{{ review.contextInfo.includedCommitMessages ? '' : '（未纳入）' }}
+          </a-tag>
+          <a-tag :color="review.contextInfo.includedReviewComments ? 'green' : 'default'">
+            评论历史{{ review.contextInfo.includedReviewComments ? '' : '（未纳入）' }}
+          </a-tag>
+          <a-tag :color="review.contextInfo.includedFileContexts ? 'green' : 'default'">
+            文件完整内容{{ review.contextInfo.includedFileContexts ? '' : '（未纳入）' }}
+          </a-tag>
+        </div>
       </a-card>
 
       <a-card v-if="!submitError" :bordered="false" class="section">
@@ -502,6 +571,8 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
 .suggestion-text {
   color: rgba(0, 0, 0, 0.85);
   line-height: 1.6;
+  flex: 1;
+  text-align: left;
 }
 .progress-card {
   border: 1px solid #e6f4ff;
@@ -530,5 +601,20 @@ const headerSubTitle = computed(() => `#${props.reviewId}`)
 }
 .progress-alert {
   margin-top: 12px;
+}
+.ctx-tags {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ctx-tags-label {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
+  margin-right: 4px;
+}
+.ctx-model-tag {
+  margin: 0;
 }
 </style>

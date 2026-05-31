@@ -38,6 +38,18 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '分析详情' },
       },
       {
+        path: 'repo',
+        name: 'repo-browser',
+        component: () => import('@/views/RepoView.vue'),
+        meta: { title: '浏览仓库' },
+      },
+      {
+        path: 'account',
+        name: 'account-settings',
+        component: () => import('@/views/AccountSettingsView.vue'),
+        meta: { title: '账户设置' },
+      },
+      {
         path: 'admin/users',
         name: 'admin-users',
         component: () => import('@/views/AdminUsersView.vue'),

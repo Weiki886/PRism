@@ -30,6 +30,19 @@ request.interceptors.request.use((config: InternalAxiosRequestConfig) => {
   return config
 })
 
+export interface BizError extends Error {
+  code: number
+  data: unknown
+}
+
+function makeBizError(code: number, msg: string, data: unknown): BizError {
+  const err = new Error(msg) as BizError
+  err.name = 'BizError'
+  err.code = code
+  err.data = data
+  return err
+}
+
 request.interceptors.response.use(
   (res: AxiosResponse<ApiResult<unknown>>) => {
     const body = res.data
@@ -40,7 +53,7 @@ request.interceptors.response.use(
       if (!res.config.silent) {
         message.error(body.message || '请求失败')
       }
-      return Promise.reject(new Error(body.message || '请求失败'))
+      return Promise.reject(makeBizError(body.code, body.message || '请求失败', body.data))
     }
     return res
   },
