@@ -51,9 +51,14 @@ export async function getReview(id: string): Promise<ReviewResponse> {
 export async function getReviewHistory(
   page = 1,
   size = 10,
+  keyword?: string,
+  status?: ReviewStatus | '',
 ): Promise<PageResult<ReviewResponse>> {
+  const params: Record<string, string | number> = { page, size }
+  if (keyword) params.keyword = keyword
+  if (status) params.status = status
   const res = await request.get<PageResult<ReviewResponse>>('/api/review/history', {
-    params: { page, size },
+    params,
   })
   return res.data
 }

@@ -57,6 +57,16 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
   const historyLoaded = ref(false)
   const pollTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
+  // 搜索/筛选独立状态：不污染全局 tasks，避免影响顶栏徽章与进行中分区
+  const searchKeyword = ref('')
+  const statusFilter = ref<ReviewStatus | ''>('')
+  const searchResults = ref<ReviewTask[]>([])
+  const searchLoading = ref(false)
+  const searchError = ref('')
+  const isSearching = computed(
+    () => searchKeyword.value.trim().length > 0 || statusFilter.value !== '',
+  )
+
   const inProgress = computed(() =>
     tasks.value.filter((t) => isInProgressStatus(t.status)),
   )
@@ -296,6 +306,36 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     }
   }
 
+  async function searchHistory(): Promise<void> {
+    const keyword = searchKeyword.value.trim()
+    const status = statusFilter.value
+    if (!keyword && !status) {
+      searchResults.value = []
+      searchError.value = ''
+      return
+    }
+    searchLoading.value = true
+    searchError.value = ''
+    try {
+      const result = await getReviewHistory(1, 50, keyword || undefined, status || undefined)
+      searchResults.value = result.records.map(reviewToTask)
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { message?: string } }; message?: string }
+      searchError.value = e?.response?.data?.message ?? e?.message ?? '搜索失败'
+      searchResults.value = []
+    } finally {
+      searchLoading.value = false
+    }
+  }
+
+  function resetSearch() {
+    searchKeyword.value = ''
+    statusFilter.value = ''
+    searchResults.value = []
+    searchError.value = ''
+    searchLoading.value = false
+  }
+
   return {
     tasks,
     inProgress,
@@ -303,6 +343,12 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     inProgressCount,
     historyLoading,
     historyLoaded,
+    searchKeyword,
+    statusFilter,
+    searchResults,
+    searchLoading,
+    searchError,
+    isSearching,
     submit,
     ensurePolling,
     refreshOne,
@@ -312,6 +358,8 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     clearFinished,
     resumeAll,
     loadHistory,
+    searchHistory,
+    resetSearch,
   }
 })
 
