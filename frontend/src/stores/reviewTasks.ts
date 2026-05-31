@@ -256,7 +256,8 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     historyLoading.value = true
     try {
       // 后端按用户分页返回，这里拉前 50 条作为历史展示
-      const list = await getReviewHistory(1, 50)
+      const result = await getReviewHistory(1, 50)
+      const list = result.records
       const known = new Set(tasks.value.map((t) => t.id).filter(Boolean) as string[])
       const merged: ReviewTask[] = []
       for (const r of list) {

@@ -30,6 +30,14 @@ export interface ReviewResponse {
   mergeAdvice?: MergeAdvice | null
 }
 
+export interface PageResult<T> {
+  records: T[]
+  total: number
+  page: number
+  size: number
+  totalPages: number
+}
+
 export async function createReview(prUrl: string): Promise<ReviewResponse> {
   const res = await request.post<ReviewResponse>('/api/review', { prUrl })
   return res.data
@@ -40,8 +48,11 @@ export async function getReview(id: string): Promise<ReviewResponse> {
   return res.data
 }
 
-export async function getReviewHistory(page = 1, size = 10): Promise<ReviewResponse[]> {
-  const res = await request.get<ReviewResponse[]>('/api/review/history', {
+export async function getReviewHistory(
+  page = 1,
+  size = 10,
+): Promise<PageResult<ReviewResponse>> {
+  const res = await request.get<PageResult<ReviewResponse>>('/api/review/history', {
     params: { page, size },
   })
   return res.data
