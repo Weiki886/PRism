@@ -18,6 +18,15 @@ export type ReviewStatus = 'pending' | 'processing' | 'completed' | 'error'
 
 export type MergeAdvice = 'RECOMMEND' | 'CAUTION' | 'NOT_RECOMMEND'
 
+export interface ContextInfo {
+  changedFiles: number
+  diffTokens: number
+  includedCommitMessages: boolean
+  includedReviewComments: boolean
+  includedFileContexts: boolean
+  model: string
+}
+
 export interface DuplicateInfo {
   existingReviewId: string
   status: ReviewStatus
@@ -41,6 +50,7 @@ export interface ReviewResponse {
   status: ReviewStatus
   healthScore?: number | null
   mergeAdvice?: MergeAdvice | null
+  contextInfo?: ContextInfo | null
 }
 
 export interface PageResult<T> {

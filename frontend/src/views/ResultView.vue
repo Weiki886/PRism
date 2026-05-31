@@ -9,6 +9,7 @@ import {
   DeleteOutlined,
   ReloadOutlined,
   DownloadOutlined,
+  ExperimentOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
 import { deleteReview, exportReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
@@ -408,6 +409,40 @@ async function handleExport(format: 'md' | 'pdf') {
         />
       </a-card>
 
+      <a-card
+        v-if="!submitError && isCompleted && review?.contextInfo"
+        :bordered="false"
+        class="section"
+      >
+        <template #title>
+          <ExperimentOutlined />
+          <span class="section-title-text">分析上下文</span>
+        </template>
+        <a-descriptions size="small" :column="{ xs: 1, sm: 2, md: 3 }">
+          <a-descriptions-item label="使用模型">
+            <a-tag color="blue" class="ctx-model-tag">{{ review.contextInfo.model }}</a-tag>
+          </a-descriptions-item>
+          <a-descriptions-item label="变更文件">
+            {{ review.contextInfo.changedFiles }} 个
+          </a-descriptions-item>
+          <a-descriptions-item label="Diff Token">
+            ~{{ review.contextInfo.diffTokens.toLocaleString() }}
+          </a-descriptions-item>
+        </a-descriptions>
+        <div class="ctx-tags">
+          <span class="ctx-tags-label">已纳入上下文：</span>
+          <a-tag :color="review.contextInfo.includedCommitMessages ? 'green' : 'default'">
+            Commit 信息{{ review.contextInfo.includedCommitMessages ? '' : '（未纳入）' }}
+          </a-tag>
+          <a-tag :color="review.contextInfo.includedReviewComments ? 'green' : 'default'">
+            评论历史{{ review.contextInfo.includedReviewComments ? '' : '（未纳入）' }}
+          </a-tag>
+          <a-tag :color="review.contextInfo.includedFileContexts ? 'green' : 'default'">
+            文件完整内容{{ review.contextInfo.includedFileContexts ? '' : '（未纳入）' }}
+          </a-tag>
+        </div>
+      </a-card>
+
       <a-card v-if="!submitError" :bordered="false" class="section">
         <template #title>
           <FileTextOutlined />
@@ -566,5 +601,20 @@ async function handleExport(format: 'md' | 'pdf') {
 }
 .progress-alert {
   margin-top: 12px;
+}
+.ctx-tags {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.ctx-tags-label {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
+  margin-right: 4px;
+}
+.ctx-model-tag {
+  margin: 0;
 }
 </style>
