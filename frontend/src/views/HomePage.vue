@@ -49,7 +49,7 @@ function onSubmit() {
         开始一次 AI 代码审查
       </a-typography-title>
       <a-typography-paragraph type="secondary" class="subtitle">
-        粘贴 GitHub 公开仓库的 Pull Request 链接，提交后将进入后台分析。
+        粘贴可访问的 GitHub 仓库的 Pull Request 链接，提交后将进入后台分析。
         可同时提交多个，进度统一在右上角任务中心查看。
       </a-typography-paragraph>
 

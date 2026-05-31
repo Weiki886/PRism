@@ -536,6 +536,8 @@ async function handleExport(format: 'md' | 'pdf') {
 .suggestion-text {
   color: rgba(0, 0, 0, 0.85);
   line-height: 1.6;
+  flex: 1;
+  text-align: left;
 }
 .progress-card {
   border: 1px solid #e6f4ff;
