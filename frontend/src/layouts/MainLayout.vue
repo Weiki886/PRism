@@ -339,6 +339,10 @@ function relativeTime(ts: number) {
                   <SettingOutlined />
                   账户设置
                 </a-menu-item>
+                <a-menu-item v-if="userStore.isAdmin" key="admin-users" @click="router.push({ name: 'admin-users' })">
+                  <CrownOutlined />
+                  用户管理
+                </a-menu-item>
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined />
                   退出登录
