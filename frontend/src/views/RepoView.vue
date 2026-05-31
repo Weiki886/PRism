@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { inject, ref, computed } from 'vue'
+import { inject, onMounted, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Modal, message } from 'ant-design-vue'
 import {
@@ -11,8 +11,20 @@ import {
   ExclamationCircleOutlined,
   CheckCircleOutlined,
   ClockCircleOutlined,
+  HistoryOutlined,
+  CloseOutlined,
+  DeleteOutlined,
 } from '@ant-design/icons-vue'
-import { getRepoInfo, getRepoPulls, type RepoInfo, type RepoPullRequest } from '@/api/repo'
+import {
+  clearRepoHistory,
+  deleteRepoHistory,
+  getRepoHistory,
+  getRepoInfo,
+  getRepoPulls,
+  type RepoBrowsingRecord,
+  type RepoInfo,
+  type RepoPullRequest,
+} from '@/api/repo'
 import { DuplicateError, retryReview } from '@/api/review'
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 
@@ -61,11 +73,30 @@ const REPO_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/i
 
 const urlValid = computed(() => REPO_URL_RE.test(repoUrl.value.trim()))
 
+const historyList = ref<RepoBrowsingRecord[]>([])
+const historyLoading = ref(false)
+const historyDeletingId = ref<number | null>(null)
+
 const stateOptions = [
   { label: 'Open', value: 'open' },
   { label: 'Closed', value: 'closed' },
   { label: '全部', value: 'all' },
 ]
+
+async function loadHistory() {
+  historyLoading.value = true
+  try {
+    historyList.value = await getRepoHistory(20)
+  } catch {
+    // 历史列表加载失败不阻塞主功能
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+onMounted(() => {
+  void loadHistory()
+})
 
 async function fetchRepoInfo() {
   const url = repoUrl.value.trim()
@@ -94,6 +125,8 @@ async function fetchRepoInfo() {
     infoLoading.value = false
   }
   await fetchPulls()
+  // 命中一次有效仓库后刷新最近浏览（后端已自动登记）
+  void loadHistory()
 }
 
 async function fetchPulls(p = page.value) {
@@ -148,6 +181,45 @@ function formatTime(iso: string): string {
   if (diff < 2_592_000_000) return `${Math.floor(diff / 86_400_000)} 天前`
   return d.toLocaleDateString('zh-CN')
 }
+
+async function openHistoryRepo(record: RepoBrowsingRecord) {
+  repoUrl.value = record.repoUrl
+  await fetchRepoInfo()
+}
+
+async function removeHistory(record: RepoBrowsingRecord, e?: Event) {
+  e?.stopPropagation()
+  if (historyDeletingId.value === record.id) return
+  historyDeletingId.value = record.id
+  try {
+    await deleteRepoHistory(record.id)
+    historyList.value = historyList.value.filter((r) => r.id !== record.id)
+  } catch {
+    // 拦截器已提示
+  } finally {
+    historyDeletingId.value = null
+  }
+}
+
+function confirmClearHistory() {
+  if (!historyList.value.length) return
+  Modal.confirm({
+    title: '清空全部浏览记录？',
+    content: `将清空当前 ${historyList.value.length} 条最近浏览的仓库记录，清空后无法恢复。`,
+    okText: '清空',
+    okType: 'danger',
+    cancelText: '取消',
+    async onOk() {
+      try {
+        await clearRepoHistory()
+        historyList.value = []
+        message.success('已清空浏览记录')
+      } catch {
+        // 拦截器已提示
+      }
+    },
+  })
+}
 </script>
 
 <template>
@@ -189,6 +261,71 @@ function formatTime(iso: string): string {
         :message="infoError"
         class="error-alert"
       />
+
+      <!-- 最近浏览过的仓库 -->
+      <a-card
+        v-if="historyList.length || historyLoading"
+        :bordered="false"
+        class="history-card"
+        size="small"
+      >
+        <template #title>
+          <span class="history-title">
+            <HistoryOutlined />
+            <span class="history-title-text">最近浏览</span>
+            <a-tag color="blue">{{ historyList.length }}</a-tag>
+          </span>
+        </template>
+        <template #extra>
+          <a-button
+            type="link"
+            size="small"
+            danger
+            :disabled="!historyList.length"
+            @click="confirmClearHistory"
+          >
+            <template #icon><DeleteOutlined /></template>
+            清空
+          </a-button>
+        </template>
+        <a-spin :spinning="historyLoading">
+          <ul v-if="historyList.length" class="history-list">
+            <li
+              v-for="record in historyList"
+              :key="record.id"
+              class="history-item"
+              @click="openHistoryRepo(record)"
+            >
+              <a-avatar
+                v-if="record.ownerAvatarUrl"
+                :src="record.ownerAvatarUrl"
+                :size="28"
+                class="history-avatar"
+              />
+              <div class="history-info">
+                <div class="history-name">
+                  <span class="history-fullname">{{ record.fullName }}</span>
+                  <a-tag v-if="record.isPrivate" color="orange" class="history-private">Private</a-tag>
+                  <span v-if="record.language" class="history-lang">{{ record.language }}</span>
+                </div>
+                <div class="history-sub">
+                  <span v-if="record.description" class="history-desc">{{ record.description }}</span>
+                  <span class="history-time">{{ formatTime(record.lastVisitedAt) }}</span>
+                </div>
+              </div>
+              <a-button
+                type="text"
+                size="small"
+                :loading="historyDeletingId === record.id"
+                class="history-remove-btn"
+                @click="(e) => removeHistory(record, e)"
+              >
+                <template #icon><CloseOutlined /></template>
+              </a-button>
+            </li>
+          </ul>
+        </a-spin>
+      </a-card>
 
       <!-- 仓库信息卡 -->
       <a-card v-if="repoInfo" :bordered="false" class="repo-card">
@@ -511,5 +648,90 @@ function formatTime(iso: string): string {
   margin-top: 16px;
   display: flex;
   justify-content: center;
+}
+.history-card {
+  border-radius: 8px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+  margin-bottom: 16px;
+}
+.history-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+.history-title-text {
+  margin: 0 2px;
+}
+.history-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.history-item:hover {
+  background: #f5f5f5;
+}
+.history-avatar {
+  flex-shrink: 0;
+}
+.history-info {
+  flex: 1;
+  min-width: 0;
+}
+.history-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.history-fullname {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1677ff;
+}
+.history-private {
+  margin: 0;
+  font-size: 11px;
+}
+.history-lang {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #f0f5ff;
+}
+.history-sub {
+  margin-top: 2px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+.history-desc {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.history-time {
+  flex-shrink: 0;
+}
+.history-remove-btn {
+  flex-shrink: 0;
 }
 </style>

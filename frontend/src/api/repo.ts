@@ -30,6 +30,19 @@ export interface RepoPullRequest {
   merged: boolean
 }
 
+export interface RepoBrowsingRecord {
+  id: number
+  repoUrl: string
+  fullName: string
+  description: string
+  language: string
+  starCount: number
+  ownerAvatarUrl: string
+  htmlUrl: string
+  isPrivate: boolean
+  lastVisitedAt: string
+}
+
 export async function getRepoInfo(repoUrl: string): Promise<RepoInfo> {
   const res = await request.get<RepoInfo>('/api/repo/info', {
     params: { repoUrl },
@@ -47,4 +60,20 @@ export async function getRepoPulls(
     params: { repoUrl, page, size, state },
   })
   return res.data
+}
+
+export async function getRepoHistory(limit = 20): Promise<RepoBrowsingRecord[]> {
+  const res = await request.get<RepoBrowsingRecord[]>('/api/repo/history', {
+    params: { limit },
+    silent: true,
+  })
+  return res.data
+}
+
+export async function deleteRepoHistory(id: number): Promise<void> {
+  await request.delete(`/api/repo/history/${id}`)
+}
+
+export async function clearRepoHistory(): Promise<void> {
+  await request.delete('/api/repo/history')
 }

@@ -55,6 +55,26 @@ CREATE TABLE IF NOT EXISTS `risk_feedback` (
     INDEX `idx_review_id` (`review_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+CREATE TABLE IF NOT EXISTS `repo_browsing` (
+    `id`               BIGINT       NOT NULL AUTO_INCREMENT,
+    `user_id`          BIGINT       NOT NULL COMMENT '浏览用户 ID',
+    `repo_url`         VARCHAR(500) NOT NULL COMMENT '原始仓库链接，与 user_id 共同作为去重键',
+    `full_name`        VARCHAR(200) NOT NULL COMMENT '仓库全名 owner/repo',
+    `description`      VARCHAR(500) DEFAULT '' COMMENT '仓库描述',
+    `language`         VARCHAR(50)  DEFAULT '' COMMENT '主要编程语言',
+    `star_count`       INT          NOT NULL DEFAULT 0,
+    `owner_avatar_url` VARCHAR(500) DEFAULT '' COMMENT '仓库 Owner 头像',
+    `html_url`         VARCHAR(500) DEFAULT '' COMMENT '仓库 GitHub 页面链接',
+    `is_private`       TINYINT      NOT NULL DEFAULT 0 COMMENT '是否私有仓库',
+    `last_visited_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `created_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    `updated_at`       DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    `deleted`          TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_user_repo_url` (`user_id`, `repo_url`),
+    INDEX `idx_user_last_visited` (`user_id`, `last_visited_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
 -- ============================================================
 # 已有数据库升级用（首次建库可忽略以下语句）
 # 若 user / review / risk_feedback 表已存在且无 deleted 列，执行：
@@ -72,4 +92,6 @@ CREATE TABLE IF NOT EXISTS `risk_feedback` (
 # ALTER TABLE `user` ADD COLUMN `avatar_url` VARCHAR(500) COMMENT '头像 URL';
 # ALTER TABLE `user` ADD UNIQUE KEY `uk_github_id` (`github_id`);
 # ALTER TABLE `user` MODIFY COLUMN `password` VARCHAR(255) COMMENT 'BCrypt hash，GitHub OAuth 用户可为空';
+
+# 若历史库无 repo_browsing 表，执行以上 CREATE TABLE 即可
 -- ============================================================
