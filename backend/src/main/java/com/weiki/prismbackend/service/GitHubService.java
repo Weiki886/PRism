@@ -1,5 +1,7 @@
 package com.weiki.prismbackend.service;
 
+import com.weiki.prismbackend.mapper.UserMapper;
+import com.weiki.prismbackend.model.entity.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
@@ -17,23 +19,47 @@ public class GitHubService {
     private static final int MAX_CONTEXT_FILES = 5;
     private static final int MAX_FILE_TOKENS = 3000;
 
-    private final WebClient githubWebClient;
+    private final WebClient defaultGithubWebClient;
+    private final UserMapper userMapper;
 
-    public GitHubService(@Qualifier("githubWebClient") WebClient githubWebClient) {
-        this.githubWebClient = githubWebClient;
+    public GitHubService(@Qualifier("githubWebClient") WebClient githubWebClient,
+                         UserMapper userMapper) {
+        this.defaultGithubWebClient = githubWebClient;
+        this.userMapper = userMapper;
+    }
+
+    /**
+     * 根据 userId 获取对应的 WebClient。
+     * 如果用户绑定了 GitHub（有 githubToken），使用用户自己的 token；
+     * 否则 fallback 到全局 token（仅能访问公开仓库）。
+     */
+    private WebClient getWebClient(Long userId) {
+        if (userId != null) {
+            User user = userMapper.selectById(userId);
+            if (user != null && user.getGithubToken() != null && !user.getGithubToken().isBlank()) {
+                return WebClient.builder()
+                        .baseUrl("https://api.github.com")
+                        .defaultHeader("Authorization", "Bearer " + user.getGithubToken())
+                        .defaultHeader("Accept", "application/vnd.github.v3+json")
+                        .defaultHeader("User-Agent", "PRism/1.0")
+                        .build();
+            }
+        }
+        return defaultGithubWebClient;
     }
 
     @SuppressWarnings("unchecked")
-    public Map<String, Object> getPrInfo(String prUrl) {
+    public Map<String, Object> getPrInfo(String prUrl, Long userId) {
         String[] parts = parsePrUrl(prUrl);
         String owner = parts[0], repo = parts[1], prNumber = parts[2];
+        WebClient client = getWebClient(userId);
 
-        Map<String, Object> prDetails = githubWebClient.get()
+        Map<String, Object> prDetails = client.get()
                 .uri("/repos/{owner}/{repo}/pulls/{number}", owner, repo, prNumber)
                 .retrieve().bodyToMono(Map.class)
                 .map(m -> (Map<String, Object>) m).block();
 
-        List<Map<String, Object>> files = githubWebClient.get()
+        List<Map<String, Object>> files = client.get()
                 .uri("/repos/{owner}/{repo}/pulls/{number}/files?per_page=100", owner, repo, prNumber)
                 .retrieve().bodyToFlux(Map.class)
                 .map(m -> (Map<String, Object>) m).collectList().block();
@@ -41,9 +67,9 @@ public class GitHubService {
         String headSha = (String) ((Map<String, Object>) prDetails.get("head")).get("sha");
 
         String diff = buildDiff(files);
-        String commitMessages = fetchCommitMessages(owner, repo, prNumber);
-        String reviewComments = fetchReviewComments(owner, repo, prNumber);
-        String fileContexts = fetchFileContents(owner, repo, headSha, files);
+        String commitMessages = fetchCommitMessages(client, owner, repo, prNumber);
+        String reviewComments = fetchReviewComments(client, owner, repo, prNumber);
+        String fileContexts = fetchFileContents(client, owner, repo, headSha, files);
 
         Map<String, Object> result = new HashMap<>();
         result.put("owner", owner);
@@ -68,9 +94,9 @@ public class GitHubService {
 
     /** 获取所有 commit message，理解开发者意图 */
     @SuppressWarnings("unchecked")
-    private String fetchCommitMessages(String owner, String repo, String prNumber) {
+    private String fetchCommitMessages(WebClient client, String owner, String repo, String prNumber) {
         try {
-            List<Map<String, Object>> commits = githubWebClient.get()
+            List<Map<String, Object>> commits = client.get()
                     .uri("/repos/{owner}/{repo}/pulls/{number}/commits?per_page=100", owner, repo, prNumber)
                     .retrieve().bodyToFlux(Map.class)
                     .map(m -> (Map<String, Object>) m).collectList().block();
@@ -87,9 +113,9 @@ public class GitHubService {
 
     /** 获取 PR 评论和 review 讨论 */
     @SuppressWarnings("unchecked")
-    private String fetchReviewComments(String owner, String repo, String prNumber) {
+    private String fetchReviewComments(WebClient client, String owner, String repo, String prNumber) {
         try {
-            List<Map<String, Object>> comments = githubWebClient.get()
+            List<Map<String, Object>> comments = client.get()
                     .uri("/repos/{owner}/{repo}/pulls/{number}/comments?per_page=30", owner, repo, prNumber)
                     .retrieve().bodyToFlux(Map.class)
                     .map(m -> (Map<String, Object>) m).collectList().block();
@@ -111,7 +137,7 @@ public class GitHubService {
 
     /** 获取修改文件的完整内容，提供代码上下文 */
     @SuppressWarnings("unchecked")
-    private String fetchFileContents(String owner, String repo, String headSha,
+    private String fetchFileContents(WebClient client, String owner, String repo, String headSha,
                                      List<Map<String, Object>> files) {
         StringBuilder sb = new StringBuilder();
         int count = 0;
@@ -120,11 +146,10 @@ public class GitHubService {
         for (Map<String, Object> file : files) {
             if (count >= MAX_CONTEXT_FILES || tokenCount >= MAX_FILE_TOKENS) break;
             String filename = (String) file.get("filename");
-            // 跳过非代码文件
             if (isNonCodeFile(filename)) continue;
 
             try {
-                Map<String, Object> content = githubWebClient.get()
+                Map<String, Object> content = client.get()
                         .uri("/repos/{owner}/{repo}/contents/{path}?ref={ref}",
                                 owner, repo, filename, headSha)
                         .retrieve().bodyToMono(Map.class)

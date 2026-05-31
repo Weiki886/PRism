@@ -33,6 +33,15 @@ export const useUserStore = defineStore('user', () => {
     return data
   }
 
+  function setLoginData(data: { token: string; username: string; role: string }) {
+    token.value = data.token
+    username.value = data.username
+    role.value = data.role
+    localStorage.setItem('prism_token', data.token)
+    localStorage.setItem('prism_username', data.username)
+    localStorage.setItem('prism_role', data.role)
+  }
+
   function logout() {
     token.value = ''
     username.value = ''
@@ -51,6 +60,7 @@ export const useUserStore = defineStore('user', () => {
     isLoggedIn,
     isAdmin,
     login,
+    setLoginData,
     logout,
   }
 })

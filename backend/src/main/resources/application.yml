@@ -21,6 +21,8 @@ server:
 
 github:
   token: ${GITHUB_TOKEN}
+  client-id: ${GITHUB_CLIENT_ID}
+  client-secret: ${GITHUB_CLIENT_SECRET}
 
 mybatis-plus:
   configuration:
