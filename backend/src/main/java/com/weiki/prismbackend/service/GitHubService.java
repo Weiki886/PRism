@@ -1,6 +1,7 @@
 package com.weiki.prismbackend.service;
 
 import com.weiki.prismbackend.mapper.UserMapper;
+import com.weiki.prismbackend.model.dto.RepoPullRequest;
 import com.weiki.prismbackend.model.entity.User;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -208,5 +209,114 @@ public class GitHubService {
             throw new IllegalArgumentException("无效的 GitHub PR 链接: " + prUrl);
         }
         return new String[]{parts[0], parts[1], parts[3]};
+    }
+
+    /**
+     * 解析仓库 URL，返回 [owner, repo]。
+     * 支持格式：https://github.com/owner/repo 或 https://github.com/owner/repo/...
+     */
+    private String[] parseRepoUrl(String repoUrl) {
+        String path = repoUrl.replaceFirst("https?://github\\.com/", "");
+        // 去掉末尾斜杠
+        if (path.endsWith("/")) path = path.substring(0, path.length() - 1);
+        String[] parts = path.split("/");
+        if (parts.length < 2) {
+            throw new IllegalArgumentException("无效的 GitHub 仓库链接: " + repoUrl);
+        }
+        return new String[]{parts[0], parts[1]};
+    }
+
+    /**
+     * 获取仓库的 PR 列表。
+     *
+     * @param repoUrl 仓库链接，如 https://github.com/owner/repo
+     * @param userId  当前用户 ID（用于获取 token）
+     * @param page    页码（从 1 开始）
+     * @param size    每页数量（最大 100）
+     * @param state   PR 状态过滤：open / closed / all
+     * @return PR 列表
+     */
+    @SuppressWarnings("unchecked")
+    public List<RepoPullRequest> listPullRequests(String repoUrl, Long userId, int page, int size, String state) {
+        String[] parts = parseRepoUrl(repoUrl);
+        String owner = parts[0], repo = parts[1];
+        WebClient client = getWebClient(userId);
+
+        final int finalSize = Math.min(size, 100);
+        final String finalState = (state == null || state.isBlank()) ? "all" : state;
+
+        List<Map<String, Object>> prs = client.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/repos/{owner}/{repo}/pulls")
+                        .queryParam("state", finalState)
+                        .queryParam("sort", "updated")
+                        .queryParam("direction", "desc")
+                        .queryParam("per_page", finalSize)
+                        .queryParam("page", page)
+                        .build(owner, repo))
+                .retrieve()
+                .bodyToFlux(Map.class)
+                .map(m -> (Map<String, Object>) m)
+                .collectList()
+                .block();
+
+        if (prs == null) return List.of();
+
+        return prs.stream().map(pr -> {
+            Map<String, Object> user = (Map<String, Object>) pr.get("user");
+            List<Map<String, Object>> labelList = (List<Map<String, Object>>) pr.get("labels");
+            List<String> labels = labelList == null ? List.of()
+                    : labelList.stream().map(l -> (String) l.get("name")).toList();
+
+            boolean merged = pr.get("merged_at") != null;
+            String prState = merged ? "merged" : (String) pr.get("state");
+
+            return RepoPullRequest.builder()
+                    .number((Integer) pr.get("number"))
+                    .title((String) pr.get("title"))
+                    .author(user != null ? (String) user.get("login") : "")
+                    .avatarUrl(user != null ? (String) user.get("avatar_url") : "")
+                    .state(prState)
+                    .createdAt((String) pr.get("created_at"))
+                    .updatedAt((String) pr.get("updated_at"))
+                    .labels(labels)
+                    .htmlUrl((String) pr.get("html_url"))
+                    .merged(merged)
+                    .build();
+        }).toList();
+    }
+
+    /**
+     * 获取仓库的 PR 总数（通过 GitHub Search API）。
+     */
+    @SuppressWarnings("unchecked")
+    public int countPullRequests(String repoUrl, Long userId, String state) {
+        String[] parts = parseRepoUrl(repoUrl);
+        String owner = parts[0], repo = parts[1];
+        WebClient client = getWebClient(userId);
+
+        // GitHub Search API: is:pr repo:owner/repo state:open/closed
+        String query = "repo:" + owner + "/" + repo + " is:pr";
+        if ("open".equals(state)) {
+            query += " is:open";
+        } else if ("closed".equals(state)) {
+            query += " is:closed";
+        }
+
+        String finalQuery = query;
+        Map<String, Object> result = client.get()
+                .uri(uriBuilder -> uriBuilder
+                        .path("/search/issues")
+                        .queryParam("q", finalQuery)
+                        .queryParam("per_page", 1)
+                        .build())
+                .retrieve()
+                .bodyToMono(Map.class)
+                .map(m -> (Map<String, Object>) m)
+                .block();
+
+        if (result == null) return 0;
+        Object totalCount = result.get("total_count");
+        return totalCount instanceof Integer ? (Integer) totalCount : 0;
     }
 }
