@@ -15,6 +15,12 @@ const routes: RouteRecordRaw[] = [
     meta: { public: true, title: '注册' },
   },
   {
+    path: '/auth/github/callback',
+    name: 'github-callback',
+    component: () => import('@/views/GitHubCallbackView.vue'),
+    meta: { public: true, title: 'GitHub 登录中' },
+  },
+  {
     path: '/',
     component: () => import('@/layouts/MainLayout.vue'),
     redirect: { name: 'home' },

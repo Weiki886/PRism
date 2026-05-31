@@ -26,6 +26,16 @@ public class User {
 
     private String role;
 
+    /** GitHub OAuth 绑定信息 */
+    private Long githubId;
+
+    private String githubLogin;
+
+    @JsonIgnore
+    private String githubToken;
+
+    private String avatarUrl;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

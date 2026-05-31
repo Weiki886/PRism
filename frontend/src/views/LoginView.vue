@@ -2,8 +2,9 @@
 import { reactive, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { message, type FormProps } from 'ant-design-vue'
-import { UserOutlined, LockOutlined, ThunderboltOutlined } from '@ant-design/icons-vue'
+import { UserOutlined, LockOutlined, ThunderboltOutlined, GithubOutlined } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
+import { getGithubAuthorizeUrl } from '@/api/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +21,7 @@ const rules: FormProps['rules'] = {
 }
 
 const loading = ref(false)
+const githubLoading = ref(false)
 const formRef = ref()
 
 async function onSubmit() {
@@ -33,6 +35,18 @@ async function onSubmit() {
     /* 错误已由拦截器统一弹 message */
   } finally {
     loading.value = false
+  }
+}
+
+async function onGithubLogin() {
+  githubLoading.value = true
+  try {
+    const { authorizeUrl } = await getGithubAuthorizeUrl()
+    window.location.href = authorizeUrl
+  } catch {
+    message.error('获取 GitHub 授权链接失败')
+  } finally {
+    githubLoading.value = false
   }
 }
 </script>
@@ -94,7 +108,14 @@ async function onSubmit() {
         </a-form-item>
       </a-form>
 
-      <div class="alt">
+      <a-divider>或</a-divider>
+
+      <a-button size="large" block :loading="githubLoading" @click="onGithubLogin">
+        <template #icon><GithubOutlined /></template>
+        使用 GitHub 登录
+      </a-button>
+
+      <div class="alt" style="margin-top: 16px">
         还没有账号？
         <router-link to="/register">立即注册</router-link>
       </div>

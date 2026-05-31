@@ -64,8 +64,8 @@ public class ReviewProcessor {
             review.setStatus("processing");
             reviewService.updateReview(review);
 
-            // 拉取 PR 上下文
-            Map<String, Object> prInfo = gitHubService.getPrInfo(prUrl);
+            // 拉取 PR 上下文（使用该用户的 GitHub Token 访问私有仓库）
+            Map<String, Object> prInfo = gitHubService.getPrInfo(prUrl, review.getUserId());
 
             // AI 分析
             ReviewResponse result = aiReviewService.analyze(
