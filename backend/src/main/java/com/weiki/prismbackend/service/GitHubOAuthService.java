@@ -108,6 +108,6 @@ public class GitHubOAuthService {
 
         // 4. 签发 JWT
         String jwt = jwtUtil.generateToken(user.getId(), user.getUsername(), user.getRole());
-        return new LoginResponse(jwt, user.getUsername(), user.getRole());
+        return new LoginResponse(jwt, user.getUsername(), user.getRole(), user.getAvatarUrl(), user.getGithubLogin());
     }
 }
