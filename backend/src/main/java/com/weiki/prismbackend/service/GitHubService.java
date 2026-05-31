@@ -1,6 +1,7 @@
 package com.weiki.prismbackend.service;
 
 import com.weiki.prismbackend.mapper.UserMapper;
+import com.weiki.prismbackend.model.dto.RepoInfo;
 import com.weiki.prismbackend.model.dto.RepoPullRequest;
 import com.weiki.prismbackend.model.entity.User;
 import lombok.extern.slf4j.Slf4j;
@@ -209,6 +210,52 @@ public class GitHubService {
             throw new IllegalArgumentException("无效的 GitHub PR 链接: " + prUrl);
         }
         return new String[]{parts[0], parts[1], parts[3]};
+    }
+
+    /**
+     * 获取仓库基本信息。
+     */
+    @SuppressWarnings("unchecked")
+    public RepoInfo getRepoInfo(String repoUrl, Long userId) {
+        String[] parts = parseRepoUrl(repoUrl);
+        String owner = parts[0], repo = parts[1];
+        WebClient client = getWebClient(userId);
+
+        Map<String, Object> data = client.get()
+                .uri("/repos/{owner}/{repo}", owner, repo)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .map(m -> (Map<String, Object>) m)
+                .block();
+
+        if (data == null) {
+            throw new IllegalArgumentException("无法获取仓库信息: " + repoUrl);
+        }
+
+        Map<String, Object> ownerMap = (Map<String, Object>) data.get("owner");
+        List<String> topics = data.get("topics") != null ? (List<String>) data.get("topics") : List.of();
+
+        return RepoInfo.builder()
+                .fullName((String) data.get("full_name"))
+                .description((String) data.get("description"))
+                .language((String) data.get("language"))
+                .starCount(toInt(data.get("stargazers_count")))
+                .forkCount(toInt(data.get("forks_count")))
+                .openIssuesCount(toInt(data.get("open_issues_count")))
+                .ownerAvatarUrl(ownerMap != null ? (String) ownerMap.get("avatar_url") : "")
+                .ownerName(ownerMap != null ? (String) ownerMap.get("login") : "")
+                .htmlUrl((String) data.get("html_url"))
+                .defaultBranch((String) data.get("default_branch"))
+                .isPrivate(Boolean.TRUE.equals(data.get("private")))
+                .topics(topics)
+                .pushedAt((String) data.get("pushed_at"))
+                .build();
+    }
+
+    private int toInt(Object obj) {
+        if (obj instanceof Integer) return (Integer) obj;
+        if (obj instanceof Long) return ((Long) obj).intValue();
+        return 0;
     }
 
     /**

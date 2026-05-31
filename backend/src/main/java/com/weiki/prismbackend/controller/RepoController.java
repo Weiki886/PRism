@@ -2,6 +2,7 @@ package com.weiki.prismbackend.controller;
 
 import com.weiki.prismbackend.common.Result;
 import com.weiki.prismbackend.model.dto.PageResult;
+import com.weiki.prismbackend.model.dto.RepoInfo;
 import com.weiki.prismbackend.model.dto.RepoPullRequest;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
 import com.weiki.prismbackend.service.GitHubService;
@@ -24,6 +25,18 @@ public class RepoController {
 
     public RepoController(GitHubService gitHubService) {
         this.gitHubService = gitHubService;
+    }
+
+    @Operation(summary = "获取仓库基本信息",
+            description = "输入 GitHub 仓库链接，返回仓库概览信息（名称、描述、Star、Fork、语言等）。")
+    @GetMapping("/info")
+    public Result<RepoInfo> getRepoInfo(
+            @Parameter(description = "仓库链接，如 https://github.com/owner/repo", required = true)
+            @RequestParam String repoUrl,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+
+        RepoInfo info = gitHubService.getRepoInfo(repoUrl, principal.getUserId());
+        return Result.success(info);
     }
 
     @Operation(summary = "获取仓库 PR 列表",
