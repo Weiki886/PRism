@@ -19,6 +19,7 @@ import {
   SearchOutlined,
   CloseOutlined,
   FolderOpenOutlined,
+  SettingOutlined,
 } from '@ant-design/icons-vue'
 import { useUserStore } from '@/stores/user'
 import { useReviewTaskStore, type ReviewTask } from '@/stores/reviewTasks'
@@ -333,6 +334,10 @@ function relativeTime(ts: number) {
                 <a-menu-item key="stats" @click="statsOpen = true">
                   <BarChartOutlined />
                   我的统计
+                </a-menu-item>
+                <a-menu-item key="account" @click="router.push({ name: 'account-settings' })">
+                  <SettingOutlined />
+                  账户设置
                 </a-menu-item>
                 <a-menu-item key="logout" @click="handleLogout">
                   <LogoutOutlined />

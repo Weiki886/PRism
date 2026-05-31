@@ -43,6 +43,12 @@ const routes: RouteRecordRaw[] = [
         component: () => import('@/views/RepoView.vue'),
         meta: { title: '浏览仓库' },
       },
+      {
+        path: 'account',
+        name: 'account-settings',
+        component: () => import('@/views/AccountSettingsView.vue'),
+        meta: { title: '账户设置' },
+      },
     ],
   },
   {
