@@ -42,6 +42,7 @@ export class DuplicateError extends Error {
 
 export interface ReviewResponse {
   id: string
+  prUrl: string
   prTitle: string
   author: string
   summary: string
