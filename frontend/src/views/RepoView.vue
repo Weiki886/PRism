@@ -96,6 +96,15 @@ async function loadHistory() {
 
 onMounted(() => {
   void loadHistory()
+  const urlFromQuery = router.currentRoute.value.query.url as string | undefined
+  if (urlFromQuery) {
+    const decoded = decodeURIComponent(urlFromQuery)
+    repoUrl.value = decoded
+    void fetchRepoInfo().then(() => {
+      // 清除 query 参数，保持 URL 干净
+      router.replace({ name: 'repo-browser' })
+    })
+  }
 })
 
 async function fetchRepoInfo() {

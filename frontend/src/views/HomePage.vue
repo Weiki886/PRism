@@ -1,34 +1,41 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { GithubOutlined, ThunderboltOutlined, UnorderedListOutlined } from '@ant-design/icons-vue'
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 
 const taskStore = useReviewTaskStore()
+const router = useRouter()
 
 const prUrl = ref('')
 const errorMsg = ref('')
 
 const PR_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/i
+const REPO_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/i
 
 function onSubmit() {
   errorMsg.value = ''
   const url = prUrl.value.trim()
   if (!url) {
-    errorMsg.value = '请输入 PR 链接'
+    errorMsg.value = '请输入 PR 链接或仓库链接'
     return
   }
-  if (!PR_URL_RE.test(url)) {
-    errorMsg.value = '链接格式不正确，应为 https://github.com/owner/repo/pull/123'
-    return
+  if (PR_URL_RE.test(url)) {
+    // PR 链接 → 提交分析
+    void taskStore.submit(url)
+    message.success({
+      content: '已加入分析队列，可在右上角"任务"中查看进度',
+      duration: 3,
+    })
+    prUrl.value = ''
+  } else if (REPO_URL_RE.test(url)) {
+    // 仓库链接 → 跳转仓库浏览页
+    router.push({ name: 'repo-browser', query: { url } })
+    prUrl.value = ''
+  } else {
+    errorMsg.value = '链接格式不正确，请输入 PR 链接或仓库链接'
   }
-  // fire-and-forget：任务在 store 内同步入列，POST 与轮询在后台进行
-  void taskStore.submit(url)
-  message.success({
-    content: '已加入分析队列，可在右上角"任务"中查看进度',
-    duration: 3,
-  })
-  prUrl.value = ''
 }
 </script>
 
@@ -46,23 +53,23 @@ function onSubmit() {
 
     <a-card :bordered="false" class="card">
       <a-typography-title :level="3" class="title">
-        开始一次 AI 代码审查
+        开始 AI 代码审查 / 浏览仓库
       </a-typography-title>
       <a-typography-paragraph type="secondary" class="subtitle">
-        粘贴可访问的 GitHub 仓库的 Pull Request 链接，提交后将进入后台分析。
-        可同时提交多个，进度统一在右上角任务中心查看。
+        输入 GitHub PR 链接直接提交分析，或输入仓库链接浏览 PR 列表。
+        可同时提交多个 PR 分析，进度统一在右上角任务中心查看。
       </a-typography-paragraph>
 
       <a-form layout="vertical" @submit.prevent="onSubmit">
         <a-form-item
-          label="PR 链接"
+          label="GitHub 链接"
           :validate-status="errorMsg ? 'error' : ''"
           :help="errorMsg || undefined"
         >
           <a-input
             v-model:value="prUrl"
             size="large"
-            placeholder="https://github.com/owner/repo/pull/123"
+            placeholder="https://github.com/owner/repo/pull/123 或 https://github.com/owner/repo"
             allow-clear
             autofocus
           >
