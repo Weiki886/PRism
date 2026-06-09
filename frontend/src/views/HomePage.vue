@@ -12,7 +12,22 @@ const prUrl = ref('')
 const errorMsg = ref('')
 
 const PR_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+/i
-const REPO_URL_RE = /^https:\/\/github\.com\/[^/]+\/[^/]+\/?$/i
+
+/**
+ * 从用户输入中提取仓库链接。
+ * 支持：标准链接、.git 后缀、git clone 命令、/tree/...、/blob/... 等子页面
+ */
+function extractRepoUrl(input: string): string | null {
+  let url = input.trim()
+  // 去除 "git clone" 前缀
+  url = url.replace(/^git\s+clone\s+/i, '').trim()
+  // 匹配 GitHub 仓库链接，提取 owner/repo
+  const m = url.match(/^https?:\/\/github\.com\/([^/]+)\/([^/\s?#]+)/i)
+  if (!m) return null
+  // 去除 .git 后缀和子路径
+  const repo = m[2].replace(/\.git$/, '')
+  return `https://github.com/${m[1]}/${repo}`
+}
 
 function onSubmit() {
   errorMsg.value = ''
@@ -22,19 +37,22 @@ function onSubmit() {
     return
   }
   if (PR_URL_RE.test(url)) {
-    // PR 链接 → 提交分析
+    // PR 链接 → 提交分析（严格匹配，精确到 pull/number）
     void taskStore.submit(url)
     message.success({
       content: '已加入分析队列，可在右上角"任务"中查看进度',
       duration: 3,
     })
     prUrl.value = ''
-  } else if (REPO_URL_RE.test(url)) {
-    // 仓库链接 → 跳转仓库浏览页
-    router.push({ name: 'repo-browser', query: { url } })
-    prUrl.value = ''
   } else {
-    errorMsg.value = '链接格式不正确，请输入 PR 链接或仓库链接'
+    const repoUrl = extractRepoUrl(url)
+    if (repoUrl) {
+      // 仓库链接 → 跳转仓库浏览页
+      router.push({ name: 'repo-browser', query: { url: repoUrl } })
+      prUrl.value = ''
+    } else {
+      errorMsg.value = '无法识别该链接。支持 GitHub PR 链接（如 .../pull/123）或仓库链接（如 github.com/owner/repo）'
+    }
   }
 }
 </script>
