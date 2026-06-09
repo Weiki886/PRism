@@ -102,8 +102,9 @@ public class ReviewController {
             description = "根据 review id 查询分析进度和结果，用于前端轮询")
     @GetMapping("/review/{id}")
     public Result<ReviewResponse> getReview(
-            @Parameter(description = "review id") @PathVariable String id) {
-        Review r = reviewService.findById(id)
+            @Parameter(description = "review id") @PathVariable String id,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+        Review r = reviewService.findByIdAndUser(id, principal.getUserId())
                 .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
         return Result.success(toResponse(r));
     }

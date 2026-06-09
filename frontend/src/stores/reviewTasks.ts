@@ -372,6 +372,15 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     searchLoading.value = false
   }
 
+  function clear() {
+    for (const [localId] of pollTimers) {
+      stopPolling(localId)
+    }
+    tasks.value = []
+    historyLoaded.value = false
+    persist()
+  }
+
   return {
     tasks,
     inProgress,
@@ -402,6 +411,7 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
     changeHistoryPageSize,
     searchHistory,
     resetSearch,
+    clear,
   }
 })
 
