@@ -71,6 +71,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('prism_role')
     localStorage.removeItem('prism_avatar_url')
     localStorage.removeItem('prism_github_login')
+    localStorage.removeItem('prism_review_tasks')
   }
 
   init()

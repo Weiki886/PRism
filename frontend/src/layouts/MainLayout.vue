@@ -86,6 +86,7 @@ function handleLogout() {
     cancelText: '取消',
     onOk: () => {
       userStore.logout()
+      taskStore.clear()
       message.success('已退出登录')
       router.replace({ name: 'login' })
     },
