@@ -1,17 +1,22 @@
 package com.weiki.prismbackend.service;
 
-import com.weiki.prismbackend.mapper.UserMapper;
-import com.weiki.prismbackend.model.dto.RepoInfo;
-import com.weiki.prismbackend.model.dto.RepoPullRequest;
-import com.weiki.prismbackend.model.entity.User;
-import lombok.extern.slf4j.Slf4j;
+import java.nio.charset.StandardCharsets;
+import java.util.Base64;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.stream.Collectors;
+import com.weiki.prismbackend.mapper.UserMapper;
+import com.weiki.prismbackend.model.dto.RepoInfo;
+import com.weiki.prismbackend.model.dto.RepoPullRequest;
+import com.weiki.prismbackend.model.entity.User;
+
+import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 @Service
@@ -203,7 +208,10 @@ public class GitHubService {
         return sb.toString();
     }
 
-    private String[] parsePrUrl(String prUrl) {
+    /**
+     * 解析 PR 链接，返回 [owner, repo, prNumber]。
+     */
+    String[] parsePrUrl(String prUrl) {
         String path = prUrl.replaceFirst("https?://github\\.com/", "");
         String[] parts = path.split("/");
         if (parts.length < 4) {
@@ -365,5 +373,29 @@ public class GitHubService {
         if (result == null) return 0;
         Object totalCount = result.get("total_count");
         return totalCount instanceof Integer ? (Integer) totalCount : 0;
+    }
+
+    /**
+     * 将审查结果以评论形式回写到对应的 GitHub PR。
+     *
+     * @param prUrl PR 链接
+     * @param userId 当前用户 ID（用于获取 token）
+     * @param body 评论正文（Markdown 格式）
+     */
+    public void postComment(String prUrl, Long userId, String body) {
+        String[] parts = parsePrUrl(prUrl);
+        String owner = parts[0], repo = parts[1], prNumber = parts[2];
+        WebClient client = getWebClient(userId);
+
+        Map<String, String> requestBody = Map.of("body", body);
+
+        client.post()
+                .uri("/repos/{owner}/{repo}/issues/{number}/comments", owner, repo, prNumber)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(Void.class)
+                .block();
+
+        log.info("审查结果已回写 PR 评论: {}/{}/{}/{}", owner, repo, prNumber, prUrl);
     }
 }

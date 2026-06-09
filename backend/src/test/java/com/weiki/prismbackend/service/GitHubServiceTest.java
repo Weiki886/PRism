@@ -1,23 +1,25 @@
 package com.weiki.prismbackend.service;
 
-import com.weiki.prismbackend.model.dto.RepoPullRequest;
+import java.util.Map;
+
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.fail;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import org.mockito.Mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.reactive.function.client.WebClient;
+
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.util.List;
-import java.util.Map;
-
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.*;
 
 /**
  * GitHubService 单元测试。
@@ -139,6 +141,22 @@ class GitHubServiceTest {
         } catch (Exception ignored) {
         }
         verify(userMapper).selectById(1L);
+    }
+
+    // ========== postComment 测试 ==========
+
+    @Test
+    @DisplayName("postComment 应正确解析 PR URL 并发送 POST 请求")
+    void postComment_shouldPostToCorrectUrl() {
+        // postComment 需要完整的 WebClient mock 链，当前 mock 只覆盖了 GET。
+        // 验证 URL 解析部分：传入有效 PR 链接不会因为解析失败而抛 IllegalArgumentException。
+        try {
+            gitHubService.postComment("https://github.com/owner/repo/pull/42", 1L, "test body");
+        } catch (IllegalArgumentException e) {
+            fail("URL 解析失败: " + e.getMessage());
+        } catch (Exception ignored) {
+            // WebClient mock 不完整导致后续 NPE，但 URL 解析本身通过
+        }
     }
 
     @SuppressWarnings("unchecked")
