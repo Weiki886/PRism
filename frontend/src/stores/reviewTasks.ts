@@ -294,7 +294,10 @@ export const useReviewTaskStore = defineStore('reviewTasks', () => {
       // 避免翻页时丢失本地最新提交或干扰轮询。
       const kept = tasks.value.filter((t) => !t.id || isInProgressStatus(t.status))
       const newRecords = result.records.map(reviewToTask)
-      tasks.value = [...kept, ...newRecords]
+      // 去重：避开 kept 中已存在的远端记录，防止 submit() 与 loadHistory() 并发导致的重复
+      const existingIds = new Set(kept.map((t) => t.id).filter(Boolean))
+      const dedupedRecords = newRecords.filter((r) => !existingIds.has(r.id))
+      tasks.value = [...kept, ...dedupedRecords]
 
       // 如果远端返回里有进行中的（理论上少见），交给轮询接管
       for (const t of tasks.value) {
