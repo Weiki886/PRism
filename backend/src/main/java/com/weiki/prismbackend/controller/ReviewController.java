@@ -11,7 +11,9 @@ import com.weiki.prismbackend.model.dto.PageResult;
 import com.weiki.prismbackend.model.dto.ReviewStats;
 import com.weiki.prismbackend.model.entity.Review;
 import com.weiki.prismbackend.security.SecurityUserPrincipal;
+import com.weiki.prismbackend.service.GitHubService;
 import com.weiki.prismbackend.service.HealthScoreCalculator;
+import com.weiki.prismbackend.service.ReviewCommentFormatter;
 import com.weiki.prismbackend.service.ReviewExportService;
 import com.weiki.prismbackend.service.ReviewProcessor;
 import com.weiki.prismbackend.service.ReviewService;
@@ -26,6 +28,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -38,12 +41,15 @@ public class ReviewController {
     private final ReviewService reviewService;
     private final ReviewProcessor reviewProcessor;
     private final ReviewExportService reviewExportService;
+    private final GitHubService gitHubService;
 
     public ReviewController(ReviewService reviewService, ReviewProcessor reviewProcessor,
-                            ReviewExportService reviewExportService) {
+                            ReviewExportService reviewExportService,
+                            GitHubService gitHubService) {
         this.reviewService = reviewService;
         this.reviewProcessor = reviewProcessor;
         this.reviewExportService = reviewExportService;
+        this.gitHubService = gitHubService;
     }
 
     @Operation(summary = "触发 PR 分析",
@@ -199,6 +205,53 @@ public class ReviewController {
             response.getOutputStream().write(mdBytes);
             response.getOutputStream().flush();
         }
+    }
+
+    @Operation(summary = "获取回写评论预览",
+            description = "根据分析结果生成 Markdown 格式的评论预览，供用户编辑确认后再发送")
+    @GetMapping("/review/{id}/comment-preview")
+    public Result<Map<String, String>> getCommentPreview(
+            @Parameter(description = "review id") @PathVariable String id,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+
+        Review review = reviewService.findByIdAndUser(id, principal.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
+
+        if (!"completed".equals(review.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST);
+        }
+
+        List<RiskItem> risks = reviewService.parseRisks(review.getRisksJson());
+        List<String> suggestions = reviewService.parseSuggestions(review.getSuggestionsJson());
+        int healthScore = HealthScoreCalculator.calculate(risks);
+        String mergeAdvice = HealthScoreCalculator.mergeAdvice(healthScore);
+        String body = ReviewCommentFormatter.format(review, risks, suggestions, healthScore, mergeAdvice);
+
+        return Result.success(Map.of("body", body));
+    }
+
+    @Operation(summary = "回写评论到 GitHub PR",
+            description = "将用户确认/编辑后的评论内容发送到对应的 GitHub PR")
+    @PostMapping("/review/{id}/comment")
+    public Result<Void> postComment(
+            @Parameter(description = "review id") @PathVariable String id,
+            @RequestBody Map<String, String> request,
+            @AuthenticationPrincipal SecurityUserPrincipal principal) {
+
+        Review review = reviewService.findByIdAndUser(id, principal.getUserId())
+                .orElseThrow(() -> new BusinessException(ResultCode.NOT_FOUND));
+
+        if (!"completed".equals(review.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST);
+        }
+
+        String body = request.get("body");
+        if (body == null || body.isBlank()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST);
+        }
+
+        gitHubService.postComment(review.getPrUrl(), principal.getUserId(), body);
+        return Result.success();
     }
 
     private ReviewResponse toResponse(Review r) {

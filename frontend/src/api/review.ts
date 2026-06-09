@@ -95,6 +95,15 @@ export async function retryReview(id: string): Promise<ReviewResponse> {
   return res.data
 }
 
+export async function getCommentPreview(id: string): Promise<{ body: string }> {
+  const res = await request.get<{ body: string }>(`/api/review/${id}/comment-preview`)
+  return res.data
+}
+
+export async function postComment(id: string, body: string): Promise<void> {
+  await request.post(`/api/review/${id}/comment`, { body })
+}
+
 export async function exportReview(id: string, format: 'md' | 'pdf'): Promise<void> {
   const res = await request.get(`/api/review/${id}/export`, {
     params: { format },
