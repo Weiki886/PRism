@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
@@ -12,6 +13,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
+@Slf4j
 @Service
 public class AiReviewService {
 
@@ -98,6 +100,8 @@ public class AiReviewService {
                 .user(prompt.toString())
                 .call()
                 .content();
+
+        log.info("AI 原始响应 (前500字符): {}", content.length() > 500 ? content.substring(0, 500) + "..." : content);
 
         return parseResponse(content, prTitle, author);
     }

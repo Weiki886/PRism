@@ -104,18 +104,6 @@ public class ReviewProcessor {
             review.setGhPrNumber((String) prInfo.get("prNumber"));
             reviewService.updateReview(review);
 
-            // 分析完成后，将结果回写为 GitHub PR Comment
-            try {
-                List<RiskItem> risks = reviewService.parseRisks(review.getRisksJson());
-                List<String> suggestions = reviewService.parseSuggestions(review.getSuggestionsJson());
-                int healthScore = HealthScoreCalculator.calculate(risks);
-                String mergeAdvice = HealthScoreCalculator.mergeAdvice(healthScore);
-                String commentBody = ReviewCommentFormatter.format(review, risks, suggestions, healthScore, mergeAdvice);
-                gitHubService.postComment(prUrl, review.getUserId(), commentBody);
-            } catch (Exception e) {
-                log.warn("回写 PR 评论失败: {} - {}", reviewId, e.getMessage());
-            }
-
             log.info("PR 分析完成: {}", reviewId);
 
         } catch (Exception e) {

@@ -10,9 +10,10 @@ import {
   ReloadOutlined,
   DownloadOutlined,
   ExperimentOutlined,
+  CommentOutlined,
 } from '@ant-design/icons-vue'
 import { Modal, message } from 'ant-design-vue'
-import { deleteReview, exportReview, getReview, retryReview, type ReviewResponse } from '@/api/review'
+import { deleteReview, exportReview, getCommentPreview, getReview, postComment, retryReview, type ReviewResponse } from '@/api/review'
 import {
   getFeedbackStats,
   submitFeedback,
@@ -276,6 +277,42 @@ async function handleExport(format: 'md' | 'pdf') {
     exportLoading.value = null
   }
 }
+
+// 回写评论
+const commentModalVisible = ref(false)
+const commentBody = ref('')
+const commentLoading = ref(false)
+const commentPreviewLoading = ref(false)
+
+async function openCommentModal() {
+  if (!props.reviewId) return
+  commentModalVisible.value = true
+  commentPreviewLoading.value = true
+  commentBody.value = ''
+  try {
+    const data = await getCommentPreview(props.reviewId)
+    commentBody.value = data.body
+  } catch {
+    message.error('获取评论预览失败')
+    commentModalVisible.value = false
+  } finally {
+    commentPreviewLoading.value = false
+  }
+}
+
+async function handlePostComment() {
+  if (!props.reviewId || !commentBody.value.trim()) return
+  commentLoading.value = true
+  try {
+    await postComment(props.reviewId, commentBody.value)
+    message.success('评论已发送到 GitHub PR')
+    commentModalVisible.value = false
+  } catch {
+    message.error('发送评论失败，请稍后重试')
+  } finally {
+    commentLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -326,6 +363,13 @@ async function handleExport(format: 'md' | 'pdf') {
               >
                 <template #icon><DownloadOutlined /></template>
                 导出 PDF
+              </a-button>
+              <a-button
+                type="primary"
+                @click="openCommentModal"
+              >
+                <template #icon><CommentOutlined /></template>
+                回写评论
               </a-button>
             </template>
             <a-button
@@ -435,7 +479,7 @@ async function handleExport(format: 'md' | 'pdf') {
             Commit 信息{{ review.contextInfo.includedCommitMessages ? '' : '（未纳入）' }}
           </a-tag>
           <a-tag :color="review.contextInfo.includedReviewComments ? 'green' : 'default'">
-            评论历史{{ review.contextInfo.includedReviewComments ? '' : '（未纳入）' }}
+            评论历史{{ review.contextInfo.includedReviewComments ? '' : '（该 PR 暂无评论）' }}
           </a-tag>
           <a-tag :color="review.contextInfo.includedFileContexts ? 'green' : 'default'">
             文件完整内容{{ review.contextInfo.includedFileContexts ? '' : '（未纳入）' }}
@@ -515,6 +559,25 @@ async function handleExport(format: 'md' | 'pdf') {
         <a-empty v-else description="暂无建议" />
       </a-card>
     </div>
+
+    <a-modal
+      v-model:open="commentModalVisible"
+      title="回写 PR 评论"
+      :confirm-loading="commentLoading"
+      @ok="handlePostComment"
+      ok-text="发送"
+      cancel-text="取消"
+      width="680px"
+    >
+      <a-spin :spinning="commentPreviewLoading" tip="正在生成评论预览…">
+        <a-textarea
+          v-model:value="commentBody"
+          :auto-size="{ minRows: 15, maxRows: 25 }"
+          placeholder="加载中…"
+          style="font-family: monospace; font-size: 13px;"
+        />
+      </a-spin>
+    </a-modal>
   </div>
 </template>
 
