@@ -17,6 +17,8 @@ import java.util.List;
 public class ReviewResponse {
     @Schema(description = "审查结果 ID", example = "review_abc123def456")
     private String id;
+    @Schema(description = "原始 PR 链接")
+    private String prUrl;
     @Schema(description = "PR 标题")
     private String prTitle;
     @Schema(description = "PR 作者")

@@ -268,6 +268,7 @@ public class ReviewController {
 
         return ReviewResponse.builder()
                 .id(r.getId())
+                .prUrl(r.getPrUrl())
                 .prTitle(r.getPrTitle())
                 .author(r.getAuthor())
                 .summary(r.getSummary())

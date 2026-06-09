@@ -23,6 +23,7 @@ import {
 import { useReviewTaskStore } from '@/stores/reviewTasks'
 import RiskItem from '@/components/RiskItem.vue'
 import HealthScoreCard from '@/components/HealthScoreCard.vue'
+import { marked } from 'marked'
 
 const props = defineProps<{ reviewId: string }>()
 const emit = defineEmits<{
@@ -284,6 +285,11 @@ const commentBody = ref('')
 const commentLoading = ref(false)
 const commentPreviewLoading = ref(false)
 
+const commentBodyHtml = computed(() => {
+  if (!commentBody.value) return ''
+  return marked(commentBody.value) as string
+})
+
 async function openCommentModal() {
   if (!props.reviewId) return
   commentModalVisible.value = true
@@ -320,17 +326,28 @@ async function handlePostComment() {
     <div class="container">
       <a-page-header
         class="page-header"
-        :title="review?.prTitle || (isError ? '分析失败' : '正在准备分析…')"
         :sub-title="headerSubTitle"
         @back="$emit('reset')"
       >
         <template #backIcon>
           <ArrowLeftOutlined />
         </template>
+        <template #title>
+          <a
+            v-if="isCompleted && review?.prUrl"
+            :href="review.prUrl"
+            target="_blank"
+            class="pr-title-link"
+          >
+            {{ review.prTitle }}
+          </a>
+          <span v-else>{{ review?.prTitle || (isError ? '分析失败' : '正在准备分析…') }}</span>
+        </template>
         <template #tags>
           <a-tag :color="headerTagColor">{{ headerTagText }}</a-tag>
         </template>
-        <template #extra>
+
+        <div v-if="isCompleted || isError" class="action-bar">
           <a-space>
             <a-button
               v-if="isError"
@@ -372,11 +389,7 @@ async function handlePostComment() {
                 回写评论
               </a-button>
             </template>
-            <a-button
-              v-if="isCompleted || isError"
-              danger
-              @click="handleDelete"
-            >
+            <a-button danger @click="handleDelete">
               <template #icon><DeleteOutlined /></template>
               删除记录
             </a-button>
@@ -385,7 +398,7 @@ async function handlePostComment() {
               返回首页
             </a-button>
           </a-space>
-        </template>
+        </div>
 
         <a-descriptions size="small" :column="{ xs: 1, sm: 2, md: 3 }">
           <a-descriptions-item label="作者">
@@ -570,12 +583,21 @@ async function handlePostComment() {
       width="680px"
     >
       <a-spin :spinning="commentPreviewLoading" tip="正在生成评论预览…">
-        <a-textarea
-          v-model:value="commentBody"
-          :auto-size="{ minRows: 15, maxRows: 25 }"
-          placeholder="加载中…"
-          style="font-family: monospace; font-size: 13px;"
-        />
+        <a-tabs v-if="!commentPreviewLoading" default-active-key="preview">
+          <a-tab-pane key="preview" tab="预览">
+            <div
+              class="comment-preview"
+              v-html="commentBodyHtml"
+            />
+          </a-tab-pane>
+          <a-tab-pane key="edit" tab="编辑">
+            <a-textarea
+              v-model:value="commentBody"
+              :auto-size="{ minRows: 15, maxRows: 25 }"
+              style="font-family: monospace; font-size: 13px;"
+            />
+          </a-tab-pane>
+        </a-tabs>
       </a-spin>
     </a-modal>
   </div>
@@ -595,6 +617,19 @@ async function handlePostComment() {
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.03);
+}
+.action-bar {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #f0f0f0;
+}
+.pr-title-link {
+  color: rgba(0, 0, 0, 0.88);
+  text-decoration: none;
+}
+.pr-title-link:hover {
+  color: #1677ff;
+  text-decoration: underline;
 }
 .risk-stats {
   margin-top: 12px;
@@ -679,5 +714,57 @@ async function handlePostComment() {
 }
 .ctx-model-tag {
   margin: 0;
+}
+.comment-preview {
+  min-height: 360px;
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 12px;
+  border: 1px solid #f0f0f0;
+  border-radius: 6px;
+  line-height: 1.7;
+}
+.comment-preview :deep(h2) {
+  font-size: 18px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
+  margin-top: 0;
+}
+.comment-preview :deep(h3) {
+  font-size: 15px;
+  margin-top: 16px;
+}
+.comment-preview :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+.comment-preview :deep(th),
+.comment-preview :deep(td) {
+  border: 1px solid #e8e8e8;
+  padding: 6px 12px;
+  text-align: left;
+  font-size: 13px;
+}
+.comment-preview :deep(th) {
+  background: #fafafa;
+  font-weight: 600;
+}
+.comment-preview :deep(code) {
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+}
+.comment-preview :deep(hr) {
+  border: none;
+  border-top: 1px solid #eee;
+  margin: 16px 0;
+}
+.comment-preview :deep(blockquote) {
+  border-left: 3px solid #1677ff;
+  padding-left: 12px;
+  color: rgba(0,0,0,0.65);
+  margin: 12px 0;
 }
 </style>
