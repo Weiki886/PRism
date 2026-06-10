@@ -1,18 +1,20 @@
 package com.weiki.prismbackend.service;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.stereotype.Service;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.weiki.prismbackend.model.ReviewResponse;
 import com.weiki.prismbackend.model.RiskItem;
 import com.weiki.prismbackend.model.dto.ContextInfo;
 import com.weiki.prismbackend.model.entity.Review;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
-import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * PR 审查的异步处理器。
@@ -91,6 +93,12 @@ public class ReviewProcessor {
                     .includedFileContexts((boolean) prInfo.getOrDefault("hasFileContexts", false))
                     .model(model)
                     .build();
+
+            log.info("上下文信息写入: hasCommitMessages={}, hasReviewComments={}, hasFileContexts={}, diffTokens={}",
+                    contextInfo.isIncludedCommitMessages(),
+                    contextInfo.isIncludedReviewComments(),
+                    contextInfo.isIncludedFileContexts(),
+                    contextInfo.getDiffTokens());
 
             // 写回分析结果
             review.setPrTitle(result.getPrTitle());

@@ -159,9 +159,14 @@ public class GitHubService {
                 }
             }
 
+            log.info("评论抓取: 行级评论={}条, 对话评论={}条, 过滤后总长={}字符",
+                    reviewComments != null ? reviewComments.size() : 0,
+                    issueComments != null ? issueComments.size() : 0,
+                    sb.length());
+
             return sb.toString();
         } catch (Exception e) {
-            log.warn("获取 review comments 失败: {}", e.getMessage());
+            log.warn("获取 review comments 失败: {}", e.getMessage(), e);
             return "";
         }
     }
