@@ -234,6 +234,12 @@ public class GitHubService {
     }
 
     private String buildDiff(List<Map<String, Object>> files) {
+        // 按修改行数降序排列，优先纳入核心变更文件
+        files.sort((a, b) -> {
+            int ca = a.get("changes") instanceof Number na ? na.intValue() : 0;
+            int cb = b.get("changes") instanceof Number nb ? nb.intValue() : 0;
+            return Integer.compare(cb, ca);
+        });
         StringBuilder sb = new StringBuilder();
         int tokenCount = 0;
         for (Map<String, Object> file : files) {
