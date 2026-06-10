@@ -11,7 +11,7 @@
   <a href="#快速启动">快速启动</a> •
   <a href="#技术栈">技术栈</a> •
   <a href="#设计思路">设计思路</a> •
-  <a href="#Demo 视频">Demo 视频</a>
+  <a href="#Demo 视频">Demo-视频</a>
 </p>
 
 
