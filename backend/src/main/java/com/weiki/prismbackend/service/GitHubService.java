@@ -162,6 +162,7 @@ public class GitHubService {
                 for (Map<String, Object> c : issueComments) {
                     String user = (String) ((Map<String, Object>) c.get("user")).get("login");
                     String body = (String) c.get("body");
+                    // 跳过 PRism 自动生成的评论（包含 "PRism Code Review" 特征标记）
                     if (body != null && body.contains("PRism Code Review")) continue;
                     sb.append("- @").append(user).append(" [PR]: ");
                     sb.append(body.length() > 200 ? body.substring(0, 200) + "..." : body).append("\n");
