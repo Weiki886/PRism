@@ -428,21 +428,45 @@ public class GitHubService {
      * @param prUrl PR 链接
      * @param userId 当前用户 ID（用于获取 token）
      * @param body 评论正文（Markdown 格式）
+     * @return GitHub Issue Comment ID，用于后续更新
      */
-    public void postComment(String prUrl, Long userId, String body) {
+    @SuppressWarnings("unchecked")
+    public Long postComment(String prUrl, Long userId, String body) {
         String[] parts = parsePrUrl(prUrl);
         String owner = parts[0], repo = parts[1], prNumber = parts[2];
         WebClient client = getWebClient(userId);
 
         Map<String, String> requestBody = Map.of("body", body);
 
-        client.post()
+        Map<String, Object> resp = client.post()
                 .uri("/repos/{owner}/{repo}/issues/{number}/comments", owner, repo, prNumber)
+                .bodyValue(requestBody)
+                .retrieve()
+                .bodyToMono(Map.class)
+                .map(m -> (Map<String, Object>) m)
+                .block();
+
+        Long commentId = resp != null && resp.get("id") instanceof Number n ? n.longValue() : null;
+        log.info("审查结果已回写 PR 评论: {}/{}/{}/{} commentId={}", owner, repo, prNumber, prUrl, commentId);
+        return commentId;
+    }
+
+    /**
+     * 更新已发送的 GitHub PR 评论（PATCH 方式，不重复发布）。
+     */
+    public void updateComment(String prUrl, Long commentId, Long userId, String body) {
+        String[] parts = parsePrUrl(prUrl);
+        String owner = parts[0], repo = parts[1];
+        WebClient client = getWebClient(userId);
+        Map<String, String> requestBody = Map.of("body", body);
+
+        client.patch()
+                .uri("/repos/{owner}/{repo}/issues/comments/{commentId}", owner, repo, commentId)
                 .bodyValue(requestBody)
                 .retrieve()
                 .bodyToMono(Void.class)
                 .block();
 
-        log.info("审查结果已回写 PR 评论: {}/{}/{}/{}", owner, repo, prNumber, prUrl);
+        log.info("审查结果已更新 PR 评论: commentId={}", commentId);
     }
 }

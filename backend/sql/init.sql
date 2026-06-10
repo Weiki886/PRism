@@ -33,6 +33,7 @@ CREATE TABLE IF NOT EXISTS `review` (
     `status`      VARCHAR(20)  NOT NULL DEFAULT 'pending',
     `gh_repo`     VARCHAR(200) NOT NULL DEFAULT '',
     `gh_pr_number` VARCHAR(20)  NOT NULL DEFAULT '',
+    `gh_comment_id` BIGINT      COMMENT '已发送的 GitHub Issue Comment ID，用于后续更新而非重复发布',
     `created_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at`  DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     `deleted`     TINYINT      NOT NULL DEFAULT 0 COMMENT '逻辑删除：0-未删除，1-已删除',
@@ -94,4 +95,7 @@ CREATE TABLE IF NOT EXISTS `repo_browsing` (
 # ALTER TABLE `user` MODIFY COLUMN `password` VARCHAR(255) COMMENT 'BCrypt hash，GitHub OAuth 用户可为空';
 
 # 若历史库无 repo_browsing 表，执行以上 CREATE TABLE 即可
+
+# 若历史库 review 表无 gh_comment_id 列，执行：
+# ALTER TABLE review ADD COLUMN gh_comment_id BIGINT NULL COMMENT '已发送的 GitHub Issue Comment ID，用于后续更新而非重复发布';
 -- ============================================================

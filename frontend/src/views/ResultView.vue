@@ -578,7 +578,7 @@ async function handlePostComment() {
       title="回写 PR 评论"
       :confirm-loading="commentLoading"
       @ok="handlePostComment"
-      ok-text="发送"
+      :ok-text="review?.ghCommentId ? '更新评论' : '发送评论'"
       cancel-text="取消"
       width="680px"
     >

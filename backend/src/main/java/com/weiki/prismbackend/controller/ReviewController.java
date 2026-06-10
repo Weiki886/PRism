@@ -232,7 +232,8 @@ public class ReviewController {
     }
 
     @Operation(summary = "回写评论到 GitHub PR",
-            description = "将用户确认/编辑后的评论内容发送到对应的 GitHub PR")
+            description = "将用户确认/编辑后的评论内容发送到对应的 GitHub PR。"
+                    + "已发送过的评论走 PATCH 更新，首次发送走 POST 新增。")
     @PostMapping("/review/{id}/comment")
     public Result<Void> postComment(
             @Parameter(description = "review id") @PathVariable String id,
@@ -251,7 +252,13 @@ public class ReviewController {
             throw new BusinessException(ResultCode.BAD_REQUEST);
         }
 
-        gitHubService.postComment(review.getPrUrl(), principal.getUserId(), body);
+        if (review.getGhCommentId() != null) {
+            gitHubService.updateComment(review.getPrUrl(), review.getGhCommentId(), principal.getUserId(), body);
+        } else {
+            Long commentId = gitHubService.postComment(review.getPrUrl(), principal.getUserId(), body);
+            review.setGhCommentId(commentId);
+            reviewService.updateReview(review);
+        }
         return Result.success();
     }
 
@@ -279,6 +286,7 @@ public class ReviewController {
                 .mergeAdvice(mergeAdvice)
                 .contextInfo(reviewService.parseContextInfo(r.getContextInfoJson()))
                 .status(r.getStatus())
+                .ghCommentId(r.getGhCommentId())
                 .build();
     }
 }

@@ -52,6 +52,7 @@ export interface ReviewResponse {
   healthScore?: number | null
   mergeAdvice?: MergeAdvice | null
   contextInfo?: ContextInfo | null
+  ghCommentId?: number | null
 }
 
 export interface PageResult<T> {

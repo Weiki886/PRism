@@ -37,4 +37,6 @@ public class ReviewResponse {
     private ContextInfo contextInfo;
     @Schema(description = "状态：pending（待处理）/ processing（分析中）/ completed（完成）/ error（失败）", example = "completed")
     private String status;
+    @Schema(description = "已发送的 GitHub Comment ID，为 null 表示尚未发送", example = "1234567890")
+    private Long ghCommentId;
 }
