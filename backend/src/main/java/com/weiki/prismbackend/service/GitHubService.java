@@ -75,7 +75,9 @@ public class GitHubService {
 
         String diff = buildDiff(files);
         String commitMessages = fetchCommitMessages(client, owner, repo, prNumber);
-        String reviewComments = fetchReviewComments(client, owner, repo, prNumber);
+        Map<String, Object> commentsResult = fetchReviewComments(client, owner, repo, prNumber);
+        String reviewComments = (String) commentsResult.getOrDefault("text", "");
+        int rawCommentCount = (int) commentsResult.getOrDefault("count", 0);
         String fileContexts = fetchFileContents(client, owner, repo, headSha, files);
 
         Map<String, Object> result = new HashMap<>();
@@ -94,7 +96,7 @@ public class GitHubService {
         result.put("changedFiles", files != null ? files.size() : 0);
         result.put("diffTokens", diff.length() / 4);
         result.put("hasCommitMessages", !commitMessages.isBlank());
-        result.put("hasReviewComments", !reviewComments.isBlank());
+        result.put("hasReviewComments", rawCommentCount > 0);
         result.put("hasFileContexts", !fileContexts.isBlank());
         return result;
     }
@@ -118,9 +120,13 @@ public class GitHubService {
         }
     }
 
-    /** 获取 PR 的行级 Review Comments 和对话 Issue Comments，合并返回 */
+    /** 获取 PR 的行级 Review Comments 和对话 Issue Comments，合并返回。
+     *  @return Map: "text" = 去敏后给 AI 的评论文本, "count" = 原始评论总数（含被过滤的 PRism 自身评论） */
     @SuppressWarnings("unchecked")
-    private String fetchReviewComments(WebClient client, String owner, String repo, String prNumber) {
+    private Map<String, Object> fetchReviewComments(WebClient client, String owner, String repo, String prNumber) {
+        Map<String, Object> result = new HashMap<>();
+        result.put("text", "");
+        result.put("count", 0);
         try {
             // 1. 行级 Review Comments（附着在 diff 特定代码行上）
             List<Map<String, Object>> reviewComments = client.get()
@@ -133,6 +139,10 @@ public class GitHubService {
                     .uri("/repos/{owner}/{repo}/issues/{number}/comments?per_page=30", owner, repo, prNumber)
                     .retrieve().bodyToFlux(Map.class)
                     .map(m -> (Map<String, Object>) m).collectList().block();
+
+            int totalRaw = (reviewComments != null ? reviewComments.size() : 0)
+                         + (issueComments != null ? issueComments.size() : 0);
+            result.put("count", totalRaw);
 
             StringBuilder sb = new StringBuilder();
 
@@ -159,10 +169,17 @@ public class GitHubService {
                 }
             }
 
-            return sb.toString();
+            result.put("text", sb.toString());
+
+            log.info("评论抓取: 行级评论={}条, 对话评论={}条, 原始总数={}, 过滤后文本长={}字符",
+                    reviewComments != null ? reviewComments.size() : 0,
+                    issueComments != null ? issueComments.size() : 0,
+                    totalRaw, sb.length());
+
+            return result;
         } catch (Exception e) {
-            log.warn("获取 review comments 失败: {}", e.getMessage());
-            return "";
+            log.warn("获取 review comments 失败: {}", e.getMessage(), e);
+            return result;
         }
     }
 
