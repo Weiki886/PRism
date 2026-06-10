@@ -11,7 +11,7 @@
   <a href="#快速启动">快速启动</a> •
   <a href="#技术栈">技术栈</a> •
   <a href="#设计思路">设计思路</a> •
-  <a href="#Demo 视频">Demo-视频</a>
+  <a href="#Demo-视频">Demo-视频</a>
 </p>
 
 
@@ -188,7 +188,7 @@ PR 分析涉及多次 GitHub API 调用和 AI 推理，耗时较长。PRism 采�
 - **Webhook 自动审查**：监听 PR 创建/更新事件，自动触发分析
 - **误报率统计看板**：基于已有的反馈数据，构建准确率/误报率统计，持续优化 prompt 和模型选择
 
-## Demo 视频
+## Demo-视频
 
 https://www.bilibili.com/video/BV1RPVQ6BEcj/
 
