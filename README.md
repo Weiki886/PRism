@@ -41,7 +41,7 @@ PRism 是一个面向开发者的 AI 代码审查工具。输入 GitHub PR 链�
 | 仓库浏览             | 输入仓库链接，浏览 PR 列表并一键分析                         |
 | GitHub OAuth 登录    | 一键授权，自动获取 GitHub Token 访问私有仓库                 |
 | 报告导出             | 支持 PDF / Markdown 格式导出分析报告                         |
-| 自动回写评论         | 分析完成后自动将结果回写为 GitHub PR Comment                 |
+| 回写 GitHub 评论      | 生成 Markdown 评论预览，支持编辑后手动回写至 GitHub PR       |
 | 去重检查             | 同一 PR 重复提交时提示已有记录，避免资源浪费                 |
 | 异步分析             | 提交即返回，后台处理，前端轮询进度                           |
 | 管理员用户管理       | 管理员可查看所有用户、修改角色、删除账号                     |
@@ -94,6 +94,8 @@ npm run dev
 | GET    | /api/review/history             | 分页查询当前用户的评审历史                                |
 | DELETE | /api/review/{id}                | 删除评审记录                                              |
 | GET    | /api/review/{id}/export         | 导出分析报告（支持 pdf / markdown）                       |
+| GET    | /api/review/{id}/comment-preview | 获取回写评论的 Markdown 预览内容                          |
+| POST   | /api/review/{id}/comment        | 将编辑后的评论回写至 GitHub PR                            |
 | GET    | /api/review/stats               | 获取当前用户的评审统计                                    |
 | POST   | /api/review/{reviewId}/feedback | 提交风险反馈（误报/确认）                                 |
 | GET    | /api/review/{reviewId}/feedback | 查询风险反馈统计                                          |
@@ -204,6 +206,7 @@ https://www.bilibili.com/video/BV1RPVQ6BEcj/
 | Vue 3 / Vite / TypeScript | 前端框架                      |
 | Ant Design Vue            | UI 组件库                     |
 | Pinia                     | 状态管理                      |
+| Marked                    | Markdown 渲染（评论预览）     |
 | Axios                     | HTTP 请求                     |
 
-PR 变更总结、风险识别、置信度评分、上下文聚合、静态规则扫描、健康评分计算、异步分析、反馈机制、报告导出、仓库浏览、去重检查、自动回写评论等核心逻辑均为本项目原创实现。
+PR 变更总结、风险识别、置信度评分、上下文聚合、静态规则扫描、健康评分计算、异步分析、反馈机制、报告导出、仓库浏览、去重检查、回写评论、仓库浏览历史、多任务队列等核心逻辑均为本项目原创实现。
