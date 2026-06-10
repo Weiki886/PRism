@@ -5,14 +5,16 @@
 </p>
 
 
+
 <p align="center">
   <a href="#核心功能">核心功能</a> •
-  <a href="#系统架构">系统架构</a> •
   <a href="#快速启动">快速启动</a> •
+  <a href="#核心接口">核心接口</a> •
   <a href="#技术栈">技术栈</a> •
   <a href="#设计思路">设计思路</a> •
-  <a href="#Demo-视频">Demo-视频</a>
+  <a href="#demo-视频">Demo 视频</a>
 </p>
+
 
 
 ---
@@ -41,7 +43,7 @@ PRism 是一个面向开发者的 AI 代码审查工具。输入 GitHub PR 链�
 | 仓库浏览             | 输入仓库链接，浏览 PR 列表并一键分析                         |
 | GitHub OAuth 登录    | 一键授权，自动获取 GitHub Token 访问私有仓库                 |
 | 报告导出             | 支持 PDF / Markdown 格式导出分析报告                         |
-| 回写 GitHub 评论      | 生成 Markdown 评论预览，支持编辑后手动回写至 GitHub PR       |
+| 回写 GitHub 评论     | 生成 Markdown 评论预览，支持编辑后手动回写至 GitHub PR       |
 | 去重检查             | 同一 PR 重复提交时提示已有记录，避免资源浪费                 |
 | 异步分析             | 提交即返回，后台处理，前端轮询进度                           |
 | 管理员用户管理       | 管理员可查看所有用户、修改角色、删除账号                     |
@@ -83,33 +85,33 @@ npm run dev
 
 ## 核心接口
 
-| 方法   | 路径                            | 说明                                                      |
-| ------ | ------------------------------- | --------------------------------------------------------- |
-| POST   | /api/auth/register              | 用户注册                                                  |
-| POST   | /api/auth/login                 | 用户登录，返回 JWT                                        |
-| GET    | /api/auth/github                | 获取 GitHub OAuth 授权 URL                                |
-| POST   | /api/auth/github/callback       | GitHub OAuth 回调登录                                     |
-| POST   | /api/review                     | 触发 PR 分析（异步，立即返回 reviewId；重复提交返回 409） |
-| GET    | /api/review/{id}                | 查询分析进度与结果（前端轮询）                            |
-| GET    | /api/review/history             | 分页查询当前用户的评审历史                                |
-| DELETE | /api/review/{id}                | 删除评审记录                                              |
-| GET    | /api/review/{id}/export         | 导出分析报告（支持 pdf / markdown）                       |
+| 方法   | 路径                             | 说明                                                      |
+| ------ | -------------------------------- | --------------------------------------------------------- |
+| POST   | /api/auth/register               | 用户注册                                                  |
+| POST   | /api/auth/login                  | 用户登录，返回 JWT                                        |
+| GET    | /api/auth/github                 | 获取 GitHub OAuth 授权 URL                                |
+| POST   | /api/auth/github/callback        | GitHub OAuth 回调登录                                     |
+| POST   | /api/review                      | 触发 PR 分析（异步，立即返回 reviewId；重复提交返回 409） |
+| GET    | /api/review/{id}                 | 查询分析进度与结果（前端轮询）                            |
+| GET    | /api/review/history              | 分页查询当前用户的评审历史                                |
+| DELETE | /api/review/{id}                 | 删除评审记录                                              |
+| GET    | /api/review/{id}/export          | 导出分析报告（支持 pdf / markdown）                       |
 | GET    | /api/review/{id}/comment-preview | 获取回写评论的 Markdown 预览内容                          |
-| POST   | /api/review/{id}/comment        | 将编辑后的评论回写至 GitHub PR                            |
-| GET    | /api/review/stats               | 获取当前用户的评审统计                                    |
-| POST   | /api/review/{reviewId}/feedback | 提交风险反馈（误报/确认）                                 |
-| GET    | /api/review/{reviewId}/feedback | 查询风险反馈统计                                          |
-| GET    | /api/review/feedback-overview   | 查询我的误报率概览                                        |
-| GET    | /api/repo/info                  | 获取仓库基本信息                                          |
-| GET    | /api/repo/pulls                 | 分页获取仓库 PR 列表（支持状态过滤）                      |
-| GET    | /api/repo/history               | 获取最近浏览的仓库列表                                    |
-| DELETE | /api/repo/history/{id}          | 删除一条浏览记录                                          |
-| DELETE | /api/repo/history               | 清空所有浏览记录                                          |
-| PUT    | /api/user/profile               | 修改个人信息                                              |
-| PUT    | /api/user/password              | 修改密码                                                  |
-| GET    | /api/admin/users                | 获取所有用户（ADMIN）                                     |
-| PUT    | /api/admin/users/{id}/role      | 修改用户角色（ADMIN）                                     |
-| DELETE | /api/admin/users/{id}           | 删除用户（ADMIN）                                         |
+| POST   | /api/review/{id}/comment         | 将编辑后的评论回写至 GitHub PR                            |
+| GET    | /api/review/stats                | 获取当前用户的评审统计                                    |
+| POST   | /api/review/{reviewId}/feedback  | 提交风险反馈（误报/确认）                                 |
+| GET    | /api/review/{reviewId}/feedback  | 查询风险反馈统计                                          |
+| GET    | /api/review/feedback-overview    | 查询我的误报率概览                                        |
+| GET    | /api/repo/info                   | 获取仓库基本信息                                          |
+| GET    | /api/repo/pulls                  | 分页获取仓库 PR 列表（支持状态过滤）                      |
+| GET    | /api/repo/history                | 获取最近浏览的仓库列表                                    |
+| DELETE | /api/repo/history/{id}           | 删除一条浏览记录                                          |
+| DELETE | /api/repo/history                | 清空所有浏览记录                                          |
+| PUT    | /api/user/profile                | 修改个人信息                                              |
+| PUT    | /api/user/password               | 修改密码                                                  |
+| GET    | /api/admin/users                 | 获取所有用户（ADMIN）                                     |
+| PUT    | /api/admin/users/{id}/role       | 修改用户角色（ADMIN）                                     |
+| DELETE | /api/admin/users/{id}            | 删除用户（ADMIN）                                         |
 
 完整接口文档：启动后访问 http://localhost:8080/doc.html
 
@@ -188,7 +190,7 @@ PR 分析涉及多次 GitHub API 调用和 AI 推理，耗时较长。PRism 采�
 - **Webhook 自动审查**：监听 PR 创建/更新事件，自动触发分析
 - **误报率统计看板**：基于已有的反馈数据，构建准确率/误报率统计，持续优化 prompt 和模型选择
 
-## Demo-视频
+## Demo 视频
 
 https://www.bilibili.com/video/BV1RPVQ6BEcj/
 
@@ -202,7 +204,7 @@ https://www.bilibili.com/video/BV1RPVQ6BEcj/
 | MyBatis-Plus              | ORM 与数据持久化              |
 | JJWT                      | JWT 生成与校验                |
 | knife4j                   | OpenAPI 接口文档              |
-| iText 7                   | PDF 报告导出                  |
+| OpenPDF                   | PDF 报告导出                  |
 | Vue 3 / Vite / TypeScript | 前端框架                      |
 | Ant Design Vue            | UI 组件库                     |
 | Pinia                     | 状态管理                      |
