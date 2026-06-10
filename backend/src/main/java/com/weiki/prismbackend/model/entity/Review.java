@@ -41,6 +41,9 @@ public class Review {
 
     private String ghPrNumber;
 
+    /** GitHub Issue Comment ID，已发送评论后存储，后续更新而非重复发布 */
+    private Long ghCommentId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 
