@@ -118,23 +118,47 @@ public class GitHubService {
         }
     }
 
-    /** 获取 PR 评论和 review 讨论 */
+    /** 获取 PR 的行级 Review Comments 和对话 Issue Comments，合并返回 */
     @SuppressWarnings("unchecked")
     private String fetchReviewComments(WebClient client, String owner, String repo, String prNumber) {
         try {
-            List<Map<String, Object>> comments = client.get()
+            // 1. 行级 Review Comments（附着在 diff 特定代码行上）
+            List<Map<String, Object>> reviewComments = client.get()
                     .uri("/repos/{owner}/{repo}/pulls/{number}/comments?per_page=30", owner, repo, prNumber)
                     .retrieve().bodyToFlux(Map.class)
                     .map(m -> (Map<String, Object>) m).collectList().block();
-            if (comments == null || comments.isEmpty()) return "";
+
+            // 2. 对话 Issue Comments（PR 页面的普通讨论评论）
+            List<Map<String, Object>> issueComments = client.get()
+                    .uri("/repos/{owner}/{repo}/issues/{number}/comments?per_page=30", owner, repo, prNumber)
+                    .retrieve().bodyToFlux(Map.class)
+                    .map(m -> (Map<String, Object>) m).collectList().block();
+
             StringBuilder sb = new StringBuilder();
-            for (Map<String, Object> c : comments) {
-                String user = (String) ((Map<String, Object>) c.get("user")).get("login");
-                String body = (String) c.get("body");
-                String path = (String) c.get("path");
-                sb.append("- @").append(user).append(" [").append(path).append("]: ");
-                sb.append(body.length() > 200 ? body.substring(0, 200) + "..." : body).append("\n");
+
+            // 行级评论
+            if (reviewComments != null) {
+                for (Map<String, Object> c : reviewComments) {
+                    String user = (String) ((Map<String, Object>) c.get("user")).get("login");
+                    String body = (String) c.get("body");
+                    String path = (String) c.get("path");
+                    sb.append("- @").append(user).append(" [").append(path).append("]: ");
+                    sb.append(body.length() > 200 ? body.substring(0, 200) + "..." : body).append("\n");
+                }
             }
+
+            // 对话评论（过滤掉 PRism 自己的自动评论，避免 AI 看到自己之前的输出产生偏见）
+            if (issueComments != null) {
+                for (Map<String, Object> c : issueComments) {
+                    String user = (String) ((Map<String, Object>) c.get("user")).get("login");
+                    String body = (String) c.get("body");
+                    // 跳过 PRism 自动生成的评论（包含 "PRism Code Review" 特征标记）
+                    if (body != null && body.contains("PRism Code Review")) continue;
+                    sb.append("- @").append(user).append(" [PR]: ");
+                    sb.append(body.length() > 200 ? body.substring(0, 200) + "..." : body).append("\n");
+                }
+            }
+
             return sb.toString();
         } catch (Exception e) {
             log.warn("获取 review comments 失败: {}", e.getMessage());
