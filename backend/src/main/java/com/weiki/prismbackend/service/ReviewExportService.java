@@ -2,20 +2,33 @@ package com.weiki.prismbackend.service;
 
 import com.lowagie.text.*;
 import com.lowagie.text.Font;
+import com.lowagie.text.Rectangle;
 import com.lowagie.text.pdf.BaseFont;
+import com.lowagie.text.pdf.PdfPCell;
+import com.lowagie.text.pdf.PdfPTable;
 import com.lowagie.text.pdf.PdfWriter;
 import com.weiki.prismbackend.model.RiskItem;
 import com.weiki.prismbackend.model.entity.Review;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
-import java.awt.*;
+import java.awt.Color;
 import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 
 @Service
 public class ReviewExportService {
 
+    private static final Logger log = LoggerFactory.getLogger(ReviewExportService.class);
+
     private final ReviewService reviewService;
+
+    // 缓存的字体，避免每次导出都重新加载
+    private BaseFont chineseBaseFont;
 
     public ReviewExportService(ReviewService reviewService) {
         this.reviewService = reviewService;
@@ -80,6 +93,7 @@ public class ReviewExportService {
 
     /**
      * 将 Review 导出为 PDF 字节数组。
+     * 使用 OpenPDF 原生 API，通过 PdfPTable 实现结构化排版。
      */
     public byte[] exportPdf(Review review) {
         List<RiskItem> risks = reviewService.parseRisks(review.getRisksJson());
@@ -88,78 +102,294 @@ public class ReviewExportService {
         String mergeAdvice = HealthScoreCalculator.mergeAdvice(healthScore);
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
-            Document document = new Document(PageSize.A4, 50, 50, 50, 50);
-            PdfWriter.getInstance(document, baos);
+            Document document = new Document(PageSize.A4, 50, 50, 55, 50);
+            PdfWriter writer = PdfWriter.getInstance(document, baos);
             document.open();
 
-            // 尝试加载中文字体，fallback 到 Helvetica
-            Font titleFont;
-            Font headingFont;
-            Font bodyFont;
-            Font boldFont;
-            try {
-                BaseFont chinese = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
-                titleFont = new Font(chinese, 18, Font.BOLD);
-                headingFont = new Font(chinese, 14, Font.BOLD);
-                bodyFont = new Font(chinese, 11, Font.NORMAL);
-                boldFont = new Font(chinese, 11, Font.BOLD);
-            } catch (Exception e) {
-                titleFont = new Font(Font.HELVETICA, 18, Font.BOLD);
-                headingFont = new Font(Font.HELVETICA, 14, Font.BOLD);
-                bodyFont = new Font(Font.HELVETICA, 11, Font.NORMAL);
-                boldFont = new Font(Font.HELVETICA, 11, Font.BOLD);
-            }
+            // 加载中文字体
+            BaseFont cn = loadChineseFont();
+            Font titleFont = new Font(cn, 20, Font.BOLD, new Color(0x6366F1));
+            Font h1Font = new Font(cn, 14, Font.BOLD, new Color(0x374151));
+            Font h2Font = new Font(cn, 12, Font.BOLD, new Color(0x374151));
+            Font bodyFont = new Font(cn, 10, Font.NORMAL, new Color(0x1F2937));
+            Font boldFont = new Font(cn, 10, Font.BOLD, new Color(0x1F2937));
+            Font smallFont = new Font(cn, 8, Font.NORMAL, new Color(0x9CA3AF));
+            Font metaKeyFont = new Font(cn, 10, Font.BOLD, new Color(0x6B7280));
+            Font whiteFont = new Font(cn, 9, Font.BOLD, new Color(255, 255, 255));
+            Font greenFont = new Font(cn, 10, Font.BOLD, new Color(0x16A34A));
+            Font amberFont = new Font(cn, 10, Font.BOLD, new Color(0xD97706));
+            Font redFont = new Font(cn, 10, Font.BOLD, new Color(0xDC2626));
+            Font linkFont = new Font(cn, 9, Font.NORMAL, new Color(0x6366F1));
 
-            // Title
+            // === 标题 ===
             Paragraph title = new Paragraph("PRism Code Review Report", titleFont);
             title.setAlignment(Element.ALIGN_CENTER);
-            title.setSpacingAfter(20);
+            title.setSpacingAfter(6);
             document.add(title);
 
-            // Basic info
-            document.add(new Paragraph("Basic Info", headingFont));
-            document.add(new Paragraph("PR Title: " + nullSafe(review.getPrTitle()), bodyFont));
-            document.add(new Paragraph("Author: " + nullSafe(review.getAuthor()), bodyFont));
-            document.add(new Paragraph("Repository: " + nullSafe(review.getGhRepo()), bodyFont));
-            document.add(new Paragraph("Health Score: " + healthScore + " / 100", bodyFont));
-            document.add(new Paragraph("Merge Advice: " + nullSafe(mergeAdvice), bodyFont));
-            document.add(new Paragraph(" "));
+            // 分隔线
+            Paragraph divider = new Paragraph("─".repeat(60), smallFont);
+            divider.setAlignment(Element.ALIGN_CENTER);
+            divider.setSpacingAfter(14);
+            document.add(divider);
 
-            // Summary
-            document.add(new Paragraph("Summary", headingFont));
-            document.add(new Paragraph(nullSafe(review.getSummary()), bodyFont));
-            document.add(new Paragraph(" "));
+            // === 健康分（居中醒目） ===
+            String scoreColor = healthScore >= 80 ? "#16A34A" : healthScore >= 50 ? "#D97706" : "#DC2626";
+            Paragraph scoreLabel = new Paragraph("健康评分", new Font(cn, 10, Font.NORMAL, new Color(0x6B7280)));
+            scoreLabel.setAlignment(Element.ALIGN_CENTER);
+            scoreLabel.setSpacingAfter(4);
+            document.add(scoreLabel);
 
-            // Risks
+            Paragraph scorePara = new Paragraph(healthScore + " / 100", new Font(cn, 24, Font.BOLD,
+                    healthScore >= 80 ? new Color(0x16A34A) : healthScore >= 50 ? new Color(0xD97706) : new Color(0xDC2626)));
+            scorePara.setAlignment(Element.ALIGN_CENTER);
+            scorePara.setSpacingAfter(8);
+            document.add(scorePara);
+
+            String adviceLabel = mergeAdvice != null ? mergeAdvice : "-";
+            Color adviceColor = mergeAdvice != null && mergeAdvice.contains("RECOMMEND") && !mergeAdvice.contains("NOT") ? new Color(0x16A34A)
+                    : mergeAdvice != null && mergeAdvice.contains("CAUTION") ? new Color(0xD97706)
+                    : mergeAdvice != null ? new Color(0xDC2626) : new Color(0x6B7280);
+            Paragraph advicePara = new Paragraph(adviceLabel, new Font(cn, 12, Font.BOLD, adviceColor));
+            advicePara.setAlignment(Element.ALIGN_CENTER);
+            advicePara.setSpacingAfter(18);
+            document.add(advicePara);
+
+            // === 基本信息 ===
+            document.add(new Paragraph("基本信息", h1Font));
+            document.add(gap(4));
+
+            PdfPTable infoTable = new PdfPTable(new float[]{110, 380});
+            infoTable.setWidthPercentage(100);
+            infoTable.setSpacingAfter(12);
+            addInfoRow(infoTable, "PR 标题", review.getPrTitle(), cn);
+            addInfoRow(infoTable, "作者", review.getAuthor(), cn);
+            if (review.getGhRepo() != null && !review.getGhRepo().isBlank()) {
+                addInfoRow(infoTable, "仓库", review.getGhRepo(), cn);
+            }
+            if (review.getPrUrl() != null && !review.getPrUrl().isBlank()) {
+                addInfoRow(infoTable, "PR 链接", review.getPrUrl(), cn);
+            }
+            document.add(infoTable);
+
+            // === 变更摘要 ===
+            document.add(new Paragraph("变更摘要", h1Font));
+            document.add(gap(4));
+            Paragraph summaryPara = new Paragraph(nullSafe(review.getSummary()), bodyFont);
+            summaryPara.setSpacingAfter(14);
+            document.add(summaryPara);
+
+            // === 风险项 ===
             if (!risks.isEmpty()) {
-                document.add(new Paragraph("Risks (" + risks.size() + ")", headingFont));
+                long crit = risks.stream().filter(r -> "CRITICAL".equals(r.getLevel())).count();
+                long high = risks.stream().filter(r -> "HIGH".equals(r.getLevel())).count();
+                long med = risks.stream().filter(r -> "MEDIUM".equals(r.getLevel())).count();
+                long low = risks.stream().filter(r -> "LOW".equals(r.getLevel())).count();
+
+                document.add(new Paragraph("风险项（共 " + risks.size() + " 条）", h1Font));
+                document.add(gap(4));
+
+                // 统计条
+                StringBuilder statLine = new StringBuilder();
+                if (crit > 0) statLine.append("  CRITICAL × ").append(crit).append("  ");
+                if (high > 0) statLine.append("  HIGH × ").append(high).append("  ");
+                if (med > 0) statLine.append("  MEDIUM × ").append(med).append("  ");
+                if (low > 0) statLine.append("  LOW × ").append(low).append("  ");
+                Paragraph statPara = new Paragraph(statLine.toString(), new Font(cn, 9, Font.BOLD, new Color(0x6B7280)));
+                statPara.setSpacingAfter(8);
+                document.add(statPara);
+
+                // 风险表格
+                PdfPTable riskTable = new PdfPTable(new float[]{18, 50, 230, 120, 55});
+                riskTable.setWidthPercentage(100);
+                riskTable.setSpacingAfter(10);
+
+                // 表头
+                Color headerBg = new Color(0xF3F4F6);
+                addRiskHeader(riskTable, "#", cn, headerBg);
+                addRiskHeader(riskTable, "等级", cn, headerBg);
+                addRiskHeader(riskTable, "描述", cn, headerBg);
+                addRiskHeader(riskTable, "文件", cn, headerBg);
+                addRiskHeader(riskTable, "置信度", cn, headerBg);
+
                 for (int i = 0; i < risks.size(); i++) {
-                    RiskItem risk = risks.get(i);
-                    String riskLine = (i + 1) + ". [" + risk.getLevel() + "] " + risk.getDescription();
-                    document.add(new Paragraph(riskLine, boldFont));
-                    String fileLine = "   File: " + nullSafe(risk.getFile());
-                    if (risk.getLine() != null) fileLine += " (L" + risk.getLine() + ")";
-                    document.add(new Paragraph(fileLine, bodyFont));
-                    if (risk.getSuggestedFix() != null && !risk.getSuggestedFix().isBlank()) {
-                        document.add(new Paragraph("   Fix: " + risk.getSuggestedFix(), bodyFont));
+                    RiskItem r = risks.get(i);
+                    Color rowBg = (i % 2 == 0) ? Color.WHITE : new Color(0xFAFAFA);
+                    boolean isEven = i % 2 == 0;
+
+                    // # 列
+                    addRiskCell(riskTable, String.valueOf(i + 1), bodyFont, Element.ALIGN_CENTER, rowBg);
+
+                    // 等级（白字 + 背景色）
+                    Color levelBg = switch (r.getLevel()) {
+                        case "CRITICAL" -> new Color(0xDC2626);
+                        case "HIGH" -> new Color(0xEA580C);
+                        case "MEDIUM" -> new Color(0xCA8A04);
+                        default -> new Color(0x6B7280);
+                    };
+                    PdfPCell levelCell = new PdfPCell(new Paragraph(r.getLevel(), whiteFont));
+                    levelCell.setHorizontalAlignment(Element.ALIGN_CENTER);
+                    levelCell.setVerticalAlignment(Element.ALIGN_MIDDLE);
+                    levelCell.setBackgroundColor(levelBg);
+                    levelCell.setPadding(3);
+                    levelCell.setBorder(Rectangle.BOTTOM);
+                    levelCell.setBorderColor(new Color(0xE5E7EB));
+                    levelCell.setBorderWidth(0.5f);
+                    riskTable.addCell(levelCell);
+
+                    // 描述 + 修复建议
+                    String descText = nullSafe(r.getDescription());
+                    if (r.getSuggestedFix() != null && !r.getSuggestedFix().isBlank()) {
+                        descText += "\n  Suggested fix: " + r.getSuggestedFix();
                     }
+                    addRiskCell(riskTable, descText, bodyFont, Element.ALIGN_LEFT, rowBg);
+
+                    // 文件 + 行号
+                    String fileText = nullSafe(r.getFile());
+                    if (r.getLine() != null) fileText += "  L" + r.getLine();
+                    addRiskCell(riskTable, fileText, new Font(cn, 9, Font.NORMAL, new Color(0x374151)), Element.ALIGN_LEFT, rowBg);
+
+                    // 置信度
+                    Color confColor = switch (r.getConfidence()) {
+                        case "HIGH" -> new Color(0xDC2626);
+                        case "MEDIUM" -> new Color(0xCA8A04);
+                        default -> new Color(0x6B7280);
+                    };
+                    addRiskCell(riskTable, r.getConfidence(), new Font(cn, 9, Font.BOLD, confColor), Element.ALIGN_CENTER, rowBg);
                 }
-                document.add(new Paragraph(" "));
+                document.add(riskTable);
             }
 
-            // Suggestions
+            // === 改进建议 ===
             if (!suggestions.isEmpty()) {
-                document.add(new Paragraph("Suggestions", headingFont));
-                for (String s : suggestions) {
-                    document.add(new Paragraph("• " + s, bodyFont));
+                document.add(gap(4));
+                document.add(new Paragraph("改进建议", h1Font));
+                document.add(gap(6));
+                for (int i = 0; i < suggestions.size(); i++) {
+                    Paragraph item = new Paragraph((i + 1) + ".  " + suggestions.get(i), bodyFont);
+                    item.setIndentationLeft(14);
+                    item.setSpacingAfter(5);
+                    document.add(item);
                 }
             }
+
+            // === 页脚 ===
+            document.add(gap(16));
+            Paragraph footerLine = new Paragraph("─".repeat(60), smallFont);
+            footerLine.setAlignment(Element.ALIGN_CENTER);
+            document.add(footerLine);
+            Paragraph footer = new Paragraph("Generated by PRism AI Code Review Platform", smallFont);
+            footer.setAlignment(Element.ALIGN_CENTER);
+            document.add(footer);
 
             document.close();
             return baos.toByteArray();
         } catch (Exception e) {
-            throw new RuntimeException("Failed to generate PDF", e);
+            log.error("PDF 生成失败", e);
+            throw new RuntimeException("PDF generation failed", e);
         }
+    }
+
+    // ─── 辅助方法 ───
+
+    /**
+     * 跨平台加载中文字体。
+     */
+    private BaseFont loadChineseFont() {
+        if (chineseBaseFont != null) return chineseBaseFont;
+
+        String[][] candidates = {
+                {"C:\\Windows\\Fonts\\msyh.ttc,0", "Microsoft YaHei"},
+                {"C:\\Windows\\Fonts\\simsun.ttc,0", "SimSun"},
+                {"C:\\Windows\\Fonts\\simhei.ttf", "SimHei"},
+                {"/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", "WenQuanYi Zen Hei"},
+                {"/usr/share/fonts/truetype/wqy/wqy-microhei.ttc", "WenQuanYi Micro Hei"},
+                {"/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "Noto Sans CJK"},
+                {"/System/Library/Fonts/PingFang.ttc,0", "PingFang SC"},
+        };
+
+        for (String[] cand : candidates) {
+            Path p = Paths.get(cand[0].split(",")[0]);
+            if (Files.exists(p)) {
+                try {
+                    chineseBaseFont = BaseFont.createFont(p.toAbsolutePath().toString(),
+                            BaseFont.IDENTITY_H, BaseFont.EMBEDDED);
+                    log.info("PDF 中文字体加载成功: {}", cand[1]);
+                    return chineseBaseFont;
+                } catch (Exception e) {
+                    log.warn("字体加载失败: {} — {}", cand[1], e.getMessage());
+                }
+            }
+        }
+
+        // 回退：尝试 STSong-Light（openpdf-fonts-extra 内置）
+        try {
+            chineseBaseFont = BaseFont.createFont("STSong-Light", "UniGB-UCS2-H", BaseFont.NOT_EMBEDDED);
+            log.info("PDF 回退字体: STSong-Light");
+            return chineseBaseFont;
+        } catch (Exception e) {
+            // 最终 fallback
+        }
+
+        // 无中文字体：用 Helvetica（中文显示为空白，但至少不出错）
+        log.warn("未找到任何中文字体，PDF 中文字符将显示为空白");
+        try {
+            chineseBaseFont = BaseFont.createFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+        } catch (Exception e) {
+            throw new RuntimeException("无法加载任何字体", e);
+        }
+        return chineseBaseFont;
+    }
+
+    private void addInfoRow(PdfPTable table, String key, String value, BaseFont cn) {
+        Font keyFont = new Font(cn, 10, Font.BOLD, new Color(0x6B7280));
+        Font valFont = new Font(cn, 10, Font.NORMAL, new Color(0x1F2937));
+
+        PdfPCell keyCell = new PdfPCell(new Paragraph(key, keyFont));
+        keyCell.setBorder(Rectangle.BOTTOM);
+        keyCell.setBorderColor(new Color(0xE5E7EB));
+        keyCell.setBorderWidth(0.5f);
+        keyCell.setPadding(6);
+        keyCell.setVerticalAlignment(Element.ALIGN_TOP);
+        table.addCell(keyCell);
+
+        PdfPCell valCell = new PdfPCell(new Paragraph(nullSafe(value), valFont));
+        valCell.setBorder(Rectangle.BOTTOM);
+        valCell.setBorderColor(new Color(0xE5E7EB));
+        valCell.setBorderWidth(0.5f);
+        valCell.setPadding(6);
+        valCell.setVerticalAlignment(Element.ALIGN_TOP);
+        table.addCell(valCell);
+    }
+
+    private void addRiskHeader(PdfPTable table, String text, BaseFont cn, Color bg) {
+        Font headerFont = new Font(cn, 9, Font.BOLD, new Color(0x374151));
+        PdfPCell cell = new PdfPCell(new Paragraph(text, headerFont));
+        cell.setBackgroundColor(bg);
+        cell.setHorizontalAlignment(Element.ALIGN_CENTER);
+        cell.setPadding(5);
+        cell.setBorder(Rectangle.BOTTOM);
+        cell.setBorderColor(new Color(0xD1D5DB));
+        cell.setBorderWidth(1f);
+        table.addCell(cell);
+    }
+
+    private void addRiskCell(PdfPTable table, String text, Font font, int align, Color bg) {
+        PdfPCell cell = new PdfPCell(new Paragraph(text, font));
+        cell.setHorizontalAlignment(align);
+        cell.setVerticalAlignment(Element.ALIGN_TOP);
+        cell.setBackgroundColor(bg);
+        cell.setPadding(5);
+        cell.setBorder(Rectangle.BOTTOM);
+        cell.setBorderColor(new Color(0xE5E7EB));
+        cell.setBorderWidth(0.5f);
+        table.addCell(cell);
+    }
+
+    private Paragraph gap(int height) {
+        Paragraph p = new Paragraph(" ");
+        p.setSpacingAfter(height);
+        return p;
     }
 
     private String nullSafe(String s) {
