@@ -1,10 +1,10 @@
 package com.weiki.prismbackend.service;
 
-import com.weiki.prismbackend.model.RiskItem;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
+
+import com.weiki.prismbackend.model.RiskItem;
 
 /**
  * 静态规则扫描器，作为 AI 分析的补充兜底。
@@ -29,7 +29,7 @@ public final class StaticRuleScanner {
             ),
             new Rule(
                     Pattern.compile("catch\\s*\\([^)]*\\)\\s*\\{\\s*\\}"),
-                    "MEDIUM",
+                    "HIGH",
                     "空的异常捕获块，异常被静默吞掉，不利于排查问题",
                     "至少记录日志：log.error(\"...\", e); 或向上抛出"
             ),
